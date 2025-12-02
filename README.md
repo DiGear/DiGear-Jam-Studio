@@ -64,7 +64,7 @@ Every song folder **must** contain a `meta.json` file with the song's original d
   - **Left Click (Slider):** Adjust volume for that slot.
   - **Right Click (Filled Circle):** Clear/Unload the slot.
   - **Top-Left Button:** Open Manual Tuning panel.
-  - **Swap Stem Halves:** The little pink button in the corner of the track switches a stem from playing its first half versus its second half.
+  - **Left Click (Stem Shift Button)** Pressing the small shuffle icon in the corner of any slot shifts the bars by 16, effective swapping verses and chorus, etc.
 
 ### Interface
 
