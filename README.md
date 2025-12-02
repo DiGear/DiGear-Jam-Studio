@@ -21,7 +21,7 @@ pip install numpy soundfile sounddevice pygame pyrubberband
 ## Folder Structure
 
 The application expects a specific folder structure to load songs correctly. Create a folder named `Songs` in the same directory as the script.
-NOTE: If you DO NOT have stem for both modes, the system falls back to using relative modes (adding or subtracting 3 semitones) so it should still mix fine.
+- NOTE: If you DO NOT have stem for both modes, the system falls back to using relative modes (adding or subtracting 3 semitones) so it should still mix fine.
 
 **Structure:**
 
