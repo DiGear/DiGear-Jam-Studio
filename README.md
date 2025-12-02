@@ -7,7 +7,7 @@ A real-time Python audio mixing application that automatically synchronizes pitc
 - **8 Audio Slots:** Load stems individually into 8 mixer slots.
 - **Auto-Sync:** The first stem loaded sets the "Master" BPM and Key. All subsequent stems are time-stretched and pitch-shifted to match.
 - **Stem Support:** Dedicated handling for Vocals, Bass, Drums, and Lead.
-- **Manual Override:** Manually force the Master Key and Mode (Major/Minor) via the GUI. (BPM COMING WHEN I FIGURE IT OUT LOL)
+- **Manual Override:** Manually force the Master Key, BPM, and Mode (Major/Minor)
 - **Volume Control:** Individual volume sliders for each slot.
 
 ## Prerequisites
@@ -21,7 +21,7 @@ pip install numpy soundfile sounddevice pygame pyrubberband
 ## Folder Structure
 
 The application expects a specific folder structure to load songs correctly. Create a folder named `Songs` in the same directory as the script.
-- NOTE: If you DO NOT have stem for both modes, the system falls back to using relative modes (adding or subtracting 3 semitones) so it should still mix fine.
+- NOTE: If you DO NOT have stems for both modes, the system falls back to using relative modes (adding or subtracting 3 semitones) so it should still mix fine.
 
 **Structure:**
 

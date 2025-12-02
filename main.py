@@ -33,12 +33,16 @@ def key_shift_semitones(target_key, source_key):
 def bpm_with_multipliers(original_bpm, master_bpm):
     # find best bpm match
     candidates = [
-        original_bpm * 0.25,
-        original_bpm * 0.5,
-        original_bpm,
-        original_bpm * 2,
-        original_bpm * 4
-    ]
+            original_bpm * 0.0625,
+            original_bpm * 0.125,
+            original_bpm * 0.25,
+            original_bpm * 0.5,    # half time
+            original_bpm,          # og
+            original_bpm * 2,      # double time
+            original_bpm * 4,
+            original_bpm * 8,
+            original_bpm * 16
+        ]
     return min(candidates, key=lambda b: abs(b - master_bpm))
 
 def get_song_list():
@@ -308,6 +312,46 @@ SLIDER_COLOR = (120, 120, 120)
 SLIDER_FILL = (0, 200, 80)
 SLIDER_TIP = (255, 255, 255)
 
+class InputBox:
+    def __init__(self, x, y, w, h, text=''):
+        self.rect = pygame.Rect(x, y, w, h)
+        self.color_inactive = (60, 60, 60)
+        self.color_active = (100, 100, 255)
+        self.color = self.color_inactive
+        self.text = text
+        self.font = pygame.font.SysFont("Arial", 22)
+        self.txt_surface = self.font.render(text, True, (255, 255, 255))
+        self.active = False
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.active = not self.active
+            else:
+                self.active = False
+            self.color = self.color_active if self.active else self.color_inactive
+            return self.active
+
+        if event.type == pygame.KEYDOWN:
+            if self.active:
+                if event.key == pygame.K_RETURN:
+                    pass
+                elif event.key == pygame.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    if event.unicode.isnumeric() or (event.unicode == '.' and '.' not in self.text):
+                        self.text += event.unicode
+                self.txt_surface = self.font.render(self.text, True, (255, 255, 255))
+        return False
+
+    def draw(self, screen):
+        # Draw background
+        pygame.draw.rect(screen, (30, 30, 30), self.rect)
+        # Draw text
+        screen.blit(self.txt_surface, (self.rect.x + 10, self.rect.y + 5))
+        # Draw outline
+        pygame.draw.rect(screen, self.color, self.rect, 2)
+
 class Dropdown:
     def __init__(self, x, y, w, h, options, default_index=0, max_display_items=5):
         self.rect = pygame.Rect(x, y, w, h)
@@ -481,8 +525,9 @@ dd_song = Dropdown(240, 200, 360, 35, get_song_list(), max_display_items=7)
 dd_stem = Dropdown(240, 260, 360, 35, ["vocals", "bass", "lead", "drums"], max_display_items=4)
 
 # manual tune
-dd_key = Dropdown(220, 235, 180, 35, list(KEY_TO_INT.keys()), max_display_items=7)
-dd_scale = Dropdown(440, 235, 180, 35, ["major", "minor"], max_display_items=2)
+mt_key = Dropdown(220, 235, 180, 35, list(KEY_TO_INT.keys()), max_display_items=6)
+mt_scale = Dropdown(440, 235, 180, 35, ["major", "minor"], max_display_items=2)
+mt_bpm = InputBox(370, 200, 100, 35)
 
 def darken_color(color, factor=0.6): # one less hard-coded thing
     r, g, b = color
@@ -548,7 +593,7 @@ running = True
 
 while running:
     # bg
-    screen.fill((20, 20, 20))
+    screen.fill((15, 15, 15))
 
     # manual tune button
     pygame.draw.rect(screen, (50, 50, 120), (20, 20, 200, 40))
@@ -643,27 +688,32 @@ while running:
 
     # manual tune
     if manual_override_open:
-        pygame.draw.rect(screen, (30, 30, 30), (170, 150, 500, 250))
+        pygame.draw.rect(screen, (30, 30, 30), (170, 120, 500, 300))
         
-        title = BIGFONT.render("Set Manual Tuning", True, TEXT_COLOR)
-        screen.blit(title, (280, 165))
+        title = BIGFONT.render("Manual Tuning Menu", True, TEXT_COLOR)
+        screen.blit(title, (280, 135))
         
-        screen.blit(FONT.render("Key:", True, TEXT_COLOR), (220, 210))
-        dd_key.draw(screen)
+        screen.blit(FONT.render("BPM:", True, TEXT_COLOR), (310, 205))
+        mt_bpm.draw(screen)
 
-        screen.blit(FONT.render("Mode:", True, TEXT_COLOR), (440, 210))
-        dd_scale.draw(screen)
+        screen.blit(FONT.render("Key:", True, TEXT_COLOR), (220, 265))
+        mt_key.rect.y = 260 
+        mt_key.draw(screen)
 
-        # confirm
-        pygame.draw.rect(screen, (0, 160, 80), (230, 302, 180, 50))
-        screen.blit(BIGFONT.render("CONFIRM", True, TEXT_COLOR), (255, 312))
+        screen.blit(FONT.render("Mode:", True, TEXT_COLOR), (440, 265))
+        mt_scale.rect.y = 260
+        mt_scale.draw(screen)
+
+        btn_confirm_rect = pygame.Rect(230, 340, 180, 50)
+        pygame.draw.rect(screen, (0, 160, 80), btn_confirm_rect)
+        screen.blit(BIGFONT.render("CONFIRM", True, TEXT_COLOR), (255, 350))
         
-        # cancel
-        pygame.draw.rect(screen, (160, 60, 60), (430, 302, 180, 50))
-        screen.blit(BIGFONT.render("CANCEL", True, TEXT_COLOR), (470, 312))
+        btn_cancel_rect = pygame.Rect(430, 340, 180, 50)
+        pygame.draw.rect(screen, (160, 60, 60), btn_cancel_rect)
+        screen.blit(BIGFONT.render("CANCEL", True, TEXT_COLOR), (470, 350))
         
-        dd_key.draw_list(screen)
-        dd_scale.draw_list(screen)
+        mt_key.draw_list(screen)
+        mt_scale.draw_list(screen)
 
     # -------------------- the fukin input clicky handler -------------------- 
 
@@ -675,38 +725,88 @@ while running:
 
         # manual tuning inputs
         if manual_override_open:
-            if dd_key.handle_event(event) or dd_scale.handle_event(event):
+            if mt_key.handle_event(event) or mt_scale.handle_event(event):
                 continue
+
+            mt_bpm.handle_event(event)
             
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # hitboxes
-                btn_manual_confirm = pygame.Rect(230, 302, 180, 50)
-                btn_manual_cancel  = pygame.Rect(430, 302, 180, 50)
+                btn_manual_confirm = pygame.Rect(230, 340, 180, 50)
+                btn_manual_cancel  = pygame.Rect(430, 340, 180, 50)
 
                 # confirm click
                 if btn_manual_confirm.collidepoint(mx, my):
+                    overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+                    overlay.fill((0, 0, 0, 180))
+                    screen.blit(overlay, (0, 0))
+
+                    wait_w, wait_h = 300, 100
+                    wait_rect = pygame.Rect((SCREEN_W - wait_w)//2, (SCREEN_H - wait_h)//2, wait_w, wait_h)
+                    pygame.draw.rect(screen, (40, 40, 40), wait_rect)
+                    pygame.draw.rect(screen, (0, 200, 80), wait_rect, 3)
+
+                    wait_text = BIGFONT.render("Processing...", True, (255, 255, 255))
+                    sub_text = FONT.render("Please Wait", True, (200, 200, 200))
+                    
+                    screen.blit(wait_text, (wait_rect.centerx - wait_text.get_width()//2, wait_rect.y + 20))
+                    screen.blit(sub_text, (wait_rect.centerx - sub_text.get_width()//2, wait_rect.y + 60))
+                    pygame.display.flip()
+
                     try:
-                        master_key = dd_key.get_selected()
-                        master_scale = dd_scale.get_selected()
+                        master_key = mt_key.get_selected()
+                        master_scale = mt_scale.get_selected()
                         
-                        # reload active slots
+                        new_bpm = None
+                        if mt_bpm.text and float(mt_bpm.text) > 0:
+                            new_bpm = float(mt_bpm.text)
+                            master_bpm = new_bpm
+                        
+                        audio_engine.stop()
+                        
+                        slots_to_reload = []
                         for i, slot in enumerate(slots):
-                            if slot.empty: continue
-                            if slot.type == "drums": 
-                                song_path = os.path.join("Songs", slot.song_name)
-                                add_stem_to_slot(i, song_path, slot.type)
-                                continue
+                            if not slot.empty:
+                                slots_to_reload.append({
+                                    "id": i,
+                                    "name": slot.song_name,
+                                    "type": slot.type
+                                })
+                                slot.stem = None 
+
+                        audio_engine.max_length = 0
+                        
+                        for data in slots_to_reload:
+                            print(f"reloading slot {data['id']}")
+                            
+                            pygame.draw.rect(screen, (40, 40, 40), wait_rect)
+                            pygame.draw.rect(screen, (0, 200, 80), wait_rect, 3)
+                            
+                            header_text = FONT.render("currently tuning:", True, (200, 200, 200))
+                            info_str = f"{data['name']} ({data['type']})"
+                            info_text = FONT.render(info_str, True, (255, 255, 255))
+
+                            screen.blit(header_text, (wait_rect.centerx - header_text.get_width()//2, wait_rect.centery - 30))
+                            draw_dynamic_text(screen, info_str, FONT, wait_rect.centerx, wait_rect.centery + 5, wait_rect.width - 20, (255, 255, 255))
+                            pygame.display.flip()
 
                             if use_relative_mode:
                                 expected_scale = "minor" if master_scale == "major" else "major"
                             else:
-                                expected_scale = master_scale # parallel Mode
-                            song_path = os.path.join("Songs", slot.song_name)
-                            print(f"refeshing slot {i} (expect: {expected_scale})...")
-                            add_stem_to_slot(i, song_path, slot.type)
+                                expected_scale = master_scale 
+
+                            if data['type'] == 'drums':
+                                expected_scale = None 
+
+                            song_path = os.path.join("Songs", data["name"])
+                            add_stem_to_slot(data["id"], song_path, data["type"])
+                        
+                        audio_engine.start()
 
                     except Exception as e:
                         print(f"manual tuning error: {e}")
+                        if audio_engine.stream is None or not audio_engine.stream.active:
+                            audio_engine.start()
                     
                     manual_override_open = False
                     pygame.key.stop_text_input()
@@ -751,12 +851,20 @@ while running:
             # top left manual button
             if 20 <= mx <= 220 and 20 <= my <= 60 and event.button == 1:
                 manual_override_open = True
+
+                # bpm typer
+                if master_bpm:
+                    mt_bpm.text = str(int(master_bpm))
+                    mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, (255, 255, 255))
+                else:
+                    mt_bpm.text = ""
+                    mt_bpm.txt_surface = mt_bpm.font.render("", True, (255, 255, 255))
                 
                 # sync dropdowns
-                if master_key and master_key in dd_key.options: 
-                    dd_key.index = dd_key.options.index(master_key)
-                if master_scale and master_scale in dd_scale.options: 
-                    dd_scale.index = dd_scale.options.index(master_scale)
+                if master_key and master_key in mt_key.options: 
+                    mt_key.index = mt_key.options.index(master_key)
+                if master_scale and master_scale in mt_scale.options: 
+                    mt_scale.index = mt_scale.options.index(master_scale)
                 
                 pygame.key.start_text_input()
                 continue
@@ -807,7 +915,7 @@ while running:
 
     # the text
     if master_bpm is not None:
-        stats_text = f"BPM: {int(master_bpm)} | KEY: {master_key} {master_scale}"
+        stats_text = f"BPM: {master_bpm:.1f} | KEY: {master_key} {master_scale}"
     else:
         stats_text = "No Tuning Set"
     
