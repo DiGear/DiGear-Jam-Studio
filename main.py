@@ -933,8 +933,8 @@ while running:
                     
                     slot_btn=pygame.Rect(btn_x,btn_y,btn_x+32,btn_y+32)
                     
-                    if slot_btn.collidepoint(mx,my):
-                    
+                    if btn_x <= mx <= btn_x+32 and btn_y <= my <= btn_y+32:
+                        print('slot',slot_index,'clicked!')
                         shift_slot(slot_index)
                     
                         slot_button_clicked=True
