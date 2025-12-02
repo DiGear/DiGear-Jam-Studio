@@ -1,5 +1,6 @@
 import os
 import json
+import math
 import numpy as np
 import soundfile as sf
 import pyrubberband as rb
@@ -487,15 +488,30 @@ def darken_color(color, factor=0.6): # one less hard-coded thing
     r, g, b = color
     return (int(r * factor), int(g * factor), int(b * factor))
 
+def lighten_color(color, factor=1.5):
+    r, g, b = color
+    return (min(255, int(r * factor)), min(255, int(g * factor)), min(255, int(b * factor)))
+
+def lerp_color(c1, c2, t):
+    return (
+        int(c1[0] + (c2[0] - c1[0]) * t),
+        int(c1[1] + (c2[1] - c1[1]) * t),
+        int(c1[2] + (c2[2] - c1[2]) * t)
+    )
+
 def draw_slider(x, y, w, h, value):
+    track_outline_col = darken_color(SLIDER_COLOR, factor=0.4)
+    knob_outline_col = darken_color(SLIDER_TIP, factor=0.4)
     pygame.draw.rect(screen, SLIDER_COLOR, (x, y, w, h))
     filled = int(w * value)
     if filled > 0:
         pygame.draw.rect(screen, SLIDER_FILL, (x, y, filled, h))
+    pygame.draw.rect(screen, track_outline_col, (x, y, w, h), 2)
     knob_x = x + filled
     knob_y = y + h // 2
     knob_radius = h // 2 + 2
     pygame.draw.circle(screen, SLIDER_TIP, (knob_x, knob_y), knob_radius)
+    pygame.draw.circle(screen, knob_outline_col, (knob_x, knob_y), knob_radius, 2)
 
 def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color):
     # draws text with outline and scales if too big
@@ -538,6 +554,19 @@ while running:
     pygame.draw.rect(screen, (50, 50, 120), (20, 20, 200, 40))
     screen.blit(FONT.render("Set Manual Tuning", True, (255, 255, 255)), (30, 28))
 
+    # what
+    pulse_val = 0.0
+    if master_bpm and master_bpm > 0:
+        current_time = pygame.time.get_ticks()
+        ms_per_beat = 60000 / master_bpm
+        
+        raw_sin = math.sin((current_time * 2 * math.pi) / ms_per_beat - (math.pi / 2))
+        steepness = 3.0
+        curved_sin = math.tanh(raw_sin * steepness) # math tuah
+
+        max_val = math.tanh(steepness)
+        pulse_val = (curved_sin / max_val + 1) / 2
+
     # draw slots
     for i in range(8):
         slot = slots[i]
@@ -546,12 +575,17 @@ while running:
         
         if slot.empty:
             color = CIRCLE_COLOR_EMPTY
+            outline_color = darken_color(color)
         else:
             color = STEM_COLORS.get(slot.type, CIRCLE_COLOR_DEFAULT)
-            
-        pygame.draw.circle(screen, color, (cx, cy), CIRCLE_RADIUS)
 
-        outline_color = darken_color(color)
+            if master_bpm:
+                base_outline = darken_color(color)
+                bright_outline = lighten_color(color, factor=1.4)
+                outline_color = lerp_color(base_outline, bright_outline, pulse_val)
+            else:
+                outline_color = darken_color(color)
+            
         pygame.draw.circle(screen, color, (cx, cy), CIRCLE_RADIUS)
         pygame.draw.circle(screen, outline_color, (cx, cy), CIRCLE_RADIUS, 5)
         
@@ -567,6 +601,8 @@ while running:
                  mode_label = f"{slot.scale.capitalize()} (Parallel)"
             else:
                  mode_label = f"{slot.scale.capitalize()} (Relative)"
+        elif not slot.empty and slot.type == "drums":
+            mode_label = "Neutral Mode"
 
         # draw tuah
         draw_dynamic_text(screen, name, FONT, cx, cy - 22, max_text_width, TEXT_COLOR)
