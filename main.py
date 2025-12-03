@@ -300,6 +300,12 @@ def add_stem_to_slot(slot_id, song_folder, stem_type):
 audio_engine = AudioEngine(slots, sample_rate)
 audio_engine.start()
 
+def toggle_playback():
+    if audio_engine.stream and audio_engine.stream.active:
+        audio_engine.stop()
+    else:
+        audio_engine.start()
+
 # -------------------- DETERMINATION -------------------- 
 
 def save_project():
@@ -717,6 +723,7 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 
 clock = pygame.time.Clock()
 running = True
+pulse_timer = 0
 
 while running:
     # bg
@@ -749,16 +756,55 @@ while running:
 
     # what
     pulse_val = 0.0
+    if audio_engine.stream and audio_engine.stream.active:
+        pulse_timer += clock.get_time()
+
     if master_bpm and master_bpm > 0:
-        current_time = pygame.time.get_ticks()
         ms_per_beat = 60000 / master_bpm
         
-        raw_sin = math.sin((current_time * 2 * math.pi) / ms_per_beat - (math.pi / 2))
+
+        raw_sin = math.sin((pulse_timer * 2 * math.pi) / ms_per_beat - (math.pi / 2))
+        
         steepness = 3.0
         curved_sin = math.tanh(raw_sin * steepness) # math tuah
 
         max_val = math.tanh(steepness)
         pulse_val = (curved_sin / max_val + 1) / 2
+
+    # pause play button
+    btn_play_w = 60
+    btn_play_h = 40
+    btn_play_x = (SCREEN_W // 2) - (btn_play_w // 2)
+    btn_play_y = 20
+    
+    btn_play_rect = pygame.Rect(btn_play_x, btn_play_y, btn_play_w, btn_play_h)
+    btn_play_col = (80, 80, 90)
+
+    pygame.draw.rect(screen, btn_play_col, btn_play_rect, border_radius=2)
+    pygame.draw.rect(screen, darken_color(btn_play_col), btn_play_rect, 4, border_radius=2)
+
+    is_playing = audio_engine.stream is not None and audio_engine.stream.active
+
+    icon_col = (255, 255, 255)
+
+    if is_playing:
+        bar_w = 6
+        bar_h = 16
+        gap = 4
+        
+        pygame.draw.rect(screen, icon_col, (btn_play_rect.centerx - gap - bar_w + 2, btn_play_rect.centery - bar_h//2, bar_w, bar_h))
+        pygame.draw.rect(screen, icon_col, (btn_play_rect.centerx + gap - 2, btn_play_rect.centery - bar_h//2, bar_w, bar_h))
+        
+    else:
+        tri_w = 14
+        tri_h = 16
+        
+        pts = [
+            (btn_play_rect.centerx - 4, btn_play_rect.centery - tri_h//2),
+            (btn_play_rect.centerx - 4, btn_play_rect.centery + tri_h//2),
+            (btn_play_rect.centerx + 8, btn_play_rect.centery)
+        ]
+        pygame.draw.polygon(screen, icon_col, pts)
 
     # draw slots
     for i in range(8):
@@ -997,6 +1043,13 @@ while running:
 
         # main screen inputs
         if event.type == pygame.MOUSEBUTTONDOWN:
+
+            #pause
+            btn_play_w = 60
+            btn_play_rect = pygame.Rect((SCREEN_W // 2) - (btn_play_w // 2), 20, 60, 40)
+            
+            if btn_play_rect.collidepoint(mx, my) and event.button == 1:
+                toggle_playback()
             
             # top left manual button
             if 20 <= mx <= 220 and 20 <= my <= 60 and event.button == 1:
