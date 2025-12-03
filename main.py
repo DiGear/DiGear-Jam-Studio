@@ -300,6 +300,96 @@ def add_stem_to_slot(slot_id, song_folder, stem_type):
 audio_engine = AudioEngine(slots, sample_rate)
 audio_engine.start()
 
+# -------------------- DETERMINATION -------------------- 
+
+def save_project():
+    data = {
+        "master": {
+            "bpm": master_bpm,
+            "key": master_key,
+            "scale": master_scale
+        },
+        "slots": []
+    }
+
+    for i, slot in enumerate(slots):
+        if not slot.empty:
+            slot_data = {
+                "index": i,
+                "song_name": slot.song_name,
+                "type": slot.type,
+                "volume": slot.volume,
+                "half": slot.half,
+
+                # master override is like also a thing tho
+                "detected_key": slot.key, 
+                "detected_scale": slot.scale
+            }
+            data["slots"].append(slot_data)
+    
+    with open("project_data.json", "w") as f:
+        json.dump(data, f, indent=4)
+    print("project saved to project_data.json")
+
+def load_project(screen_surface):
+    if not os.path.exists("project_data.json"):
+        print("no SAVE found")
+        return
+
+    overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))
+    screen_surface.blit(overlay, (0, 0))
+
+    wait_w, wait_h = 300, 100
+    wait_rect = pygame.Rect((SCREEN_W - wait_w)//2, (SCREEN_H - wait_h)//2, wait_w, wait_h)
+    pygame.draw.rect(screen_surface, (40, 40, 40), wait_rect)
+    pygame.draw.rect(screen_surface, (0, 200, 80), wait_rect, 3)
+
+    wait_text = BIGFONT.render("loading project", True, (255, 255, 255))
+    screen_surface.blit(wait_text, (wait_rect.centerx - wait_text.get_width()//2, wait_rect.centery - 15))
+    pygame.display.flip()
+
+    try:
+        with open("project_data.json", "r") as f:
+            data = json.load(f)
+
+        audio_engine.stop()
+
+        global master_bpm, master_key, master_scale
+        master_bpm = data["master"]["bpm"]
+        master_key = data["master"]["key"]
+        master_scale = data["master"]["scale"]
+        
+        for i in range(8):
+            clear_slot(i)
+        
+        audio_engine.max_length = 0
+
+        for slot_data in data["slots"]:
+            idx = slot_data["index"]
+            song_name = slot_data["song_name"]
+            stem_type = slot_data["type"]
+            
+            song_path = os.path.join("Songs", song_name)
+            
+            if os.path.exists(song_path):
+                add_stem_to_slot(idx, song_path, stem_type)
+                
+                s = slots[idx]
+                s.volume = slot_data["volume"]
+                s.half = slot_data["half"]
+                
+                if s.half == 1 and not s.empty:
+                     s.offset = audio_engine.max_length // 2
+            else:
+                print(f"'{song_name}' not found during load.")
+
+        audio_engine.start()
+        print("project loaded successfully")
+
+    except Exception as e:
+        print(f"error loading project: {e}")
+
 # -------------------- fuckin pygame STUPID SHIT FUCK I HATE PYGAME AAAAA -------------------- 
 
 pygame.init()
@@ -633,8 +723,29 @@ while running:
     screen.fill((15, 15, 15))
 
     # manual tune button
-    pygame.draw.rect(screen, (50, 50, 120), (20, 20, 200, 40))
+    mt_btn_rect = pygame.Rect(20, 20, 200, 40)
+    mt_btn_color = (0, 170, 60)
+
+    pygame.draw.rect(screen, mt_btn_color, mt_btn_rect, border_radius=4)
+    pygame.draw.rect(screen, darken_color(mt_btn_color), mt_btn_rect, 4, border_radius=4)
+    
     screen.blit(FONT.render("Set Manual Tuning", True, (255, 255, 255)), (30, 28))
+
+    # save and load buttons
+    btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40, border_radius=4)
+    btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40, border_radius=4)
+
+    save_col = (230, 120, 40)
+    load_col = (60, 120, 210)
+
+    pygame.draw.rect(screen, save_col, btn_save_rect, border_radius=4)
+    pygame.draw.rect(screen, darken_color(save_col), btn_save_rect, 4, border_radius=4)
+
+    pygame.draw.rect(screen, load_col, btn_load_rect, border_radius=4)
+    pygame.draw.rect(screen, darken_color(load_col), btn_load_rect, 4, border_radius=4)
+
+    screen.blit(FONT.render("Save", True, (255,255,255)), (btn_save_rect.x + 20, btn_save_rect.y + 8))
+    screen.blit(FONT.render("Load", True, (255,255,255)), (btn_load_rect.x + 20, btn_load_rect.y + 8))
 
     # what
     pulse_val = 0.0
@@ -891,6 +1002,18 @@ while running:
             if 20 <= mx <= 220 and 20 <= my <= 60 and event.button == 1:
                 manual_override_open = True
 
+            btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40)
+            btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
+
+            if btn_save_rect.collidepoint(mx, my) and event.button == 1:
+                save_project()
+            
+            if btn_load_rect.collidepoint(mx, my) and event.button == 1:
+                load_project(screen)
+                if master_bpm:
+                    mt_bpm.text = str(int(master_bpm))
+                    mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, (255, 255, 255))
+
                 # bpm typer
                 if master_bpm:
                     mt_bpm.text = str(int(master_bpm))
@@ -916,11 +1039,6 @@ while running:
                     if (mx - cx)**2 + (my - cy)**2 < CIRCLE_RADIUS**2:
                         clear_slot(i)
                         break
-                        
-                
-
-                
-                    
 
             # left click slider or open panel
             if event.button == 1:
@@ -934,7 +1052,7 @@ while running:
                     slot_btn=pygame.Rect(btn_x,btn_y,btn_x+32,btn_y+32)
                     
                     if btn_x <= mx <= btn_x+32 and btn_y <= my <= btn_y+32:
-                        print('slot',slot_index,'clicked!')
+
                         shift_slot(slot_index)
                     
                         slot_button_clicked=True
