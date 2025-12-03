@@ -65,6 +65,7 @@ class Slot:
         self.scale = None
         self.bpm = None
         self.volume = 1.0
+        self.target_volume = 1.0
         self.offset = 0
         self.half = 0
 
@@ -179,6 +180,7 @@ def clear_slot(i):
     slot.song_name = None
     slot.type = None
     slot.volume = 1.0
+    slot.target_volume = 1.0
     slot.offset = 0
     slot.half = 0
     print(f"slot {i} cleared")
@@ -383,6 +385,7 @@ def load_project(screen_surface):
                 
                 s = slots[idx]
                 s.volume = slot_data["volume"]
+                s.target_volume = slot_data["volume"]
                 s.half = slot_data["half"]
                 
                 if s.half == 1 and not s.empty:
@@ -728,6 +731,17 @@ pulse_timer = 0
 while running:
     # bg
     screen.fill((15, 15, 15))
+
+    # slider sm64
+    lerp_speed = 0.33
+    
+    for s in slots:
+        if s.volume != s.target_volume:
+            diff = s.target_volume - s.volume
+            if abs(diff) < 0.001:
+                s.volume = s.target_volume
+            else:
+                s.volume += diff * lerp_speed
 
     # manual tune button
     mt_btn_rect = pygame.Rect(20, 20, 200, 40)
@@ -1136,7 +1150,7 @@ while running:
                         if sx <= mx <= sx + SLIDER_W and sy <= my <= sy + SLIDER_H:
                             dragging_slider = slot_index
                             rel = mx - sx
-                            slots[slot_index].volume = max(0.0, min(1.0, rel / SLIDER_W))
+                            slots[slot_index].target_volume = max(0.0, min(1.0, rel / SLIDER_W))
                             break
                         
                         # check circle click
@@ -1157,7 +1171,7 @@ while running:
             cx = 120 + (i % 4) * 200
             sx = cx - SLIDER_W // 2
             rel = mx - sx
-            slots[i].volume = max(0.0, min(1.0, rel / SLIDER_W))
+            slots[i].target_volume = max(0.0, min(1.0, rel / SLIDER_W))
 
     # ---------- text hud element idfk ----------
 
