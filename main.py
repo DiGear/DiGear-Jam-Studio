@@ -791,11 +791,11 @@ while running:
 
         if not slot.empty and slot.type != "drums" and master_scale:
             if slot.scale == master_scale:
-                 mode_label = f"{slot.scale.capitalize()} (Parallel)"
+                 mode_label = f"{slot.scale.capitalize()}"
             else:
-                 mode_label = f"{slot.scale.capitalize()} (Relative)"
+                 mode_label = f"Relative {slot.scale.capitalize()}"
         elif not slot.empty and slot.type == "drums":
-            mode_label = "Neutral Mode"
+            mode_label = "Neutral"
 
         # draw tuah
         draw_dynamic_text(screen, name, FONT, cx, cy - 22, max_text_width, TEXT_COLOR)
@@ -1001,6 +1001,22 @@ while running:
             # top left manual button
             if 20 <= mx <= 220 and 20 <= my <= 60 and event.button == 1:
                 manual_override_open = True
+
+                if master_bpm is not None:
+                    bpm_str = str(master_bpm)
+                    if bpm_str.endswith(".0"):
+                        bpm_str = bpm_str[:-2]
+                    mt_bpm.text = bpm_str
+                else:
+                    mt_bpm.text = ""
+
+                mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, (255, 255, 255))
+
+                if master_key and master_key in mt_key.options:
+                    mt_key.index = mt_key.options.index(master_key)
+
+                if master_scale and master_scale in mt_scale.options:
+                    mt_scale.index = mt_scale.options.index(master_scale)
 
             btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40)
             btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
