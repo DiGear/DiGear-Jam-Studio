@@ -15,9 +15,15 @@ KEY_TO_INT = {
     "G#": 8, "A": 9, "A#": 10, "B": 11
 }
 
+KEYS_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+KEYS_FLAT =  ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+
+USE_FLATS = False 
+
 sample_rate = 44100
 BUFFER_SIZE = 2048
 CHANNELS = 2
+SONG_FOLDERS = ["Songs", "Stock Songs"]
 
 # ----------- squif game -----------
 
@@ -28,90 +34,119 @@ screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
 
 pygame.display.set_caption("DiGear Jam Studio")
 
-favicon = pygame.image.load("favicon.png")
-pygame.display.set_icon(favicon)
+# ensure themes folder exists
+if not os.path.exists("themes"):
+    os.makedirs("themes")
 
-# ---------- gooey ----------
+try:
+    favicon = pygame.image.load("favicon.png")
+    pygame.display.set_icon(favicon)
+except:
+    pass
 
-PALETTE = {
-    # --- main ---
-    "bg_dark": (10, 10, 14), # main bg
-    "bg_light": (25, 25, 35), # grid lines
-    "panel_bg": (20, 20, 25), # panel popouts
-    "overlay": (0, 0, 0, 180), # dimming overlay
-    "popup_bg": (40, 40, 40),
-    "popup_border": (0, 200, 80), # matches "slider_fill" but its good to have a semantic name
-    "hover_outline": (128, 128, 128),
-    
-    # --- text ---
-    "text_main": (240, 240, 255),
-    "text_dim": (200, 200, 200),
-    "text_dark": (0, 0, 0), # outlines
-    "text_mode_label": (200, 255, 200),
+# ---------- graphik ----------
 
-    # --- slots ---
-    "slot_default": (80, 130, 255),
-    "slot_empty": (60, 60, 60),
-    "slot_vocals": (255, 230, 100),
-    "slot_bass": (100, 255, 150),
-    "slot_drums": (100, 230, 255),
-    "slot_lead": (255, 120, 200),
-
-    # --- other shit ---
-    "accent": (80, 130, 255),
-    "input_bg": (30, 30, 30),
-    "input_border": (60, 60, 60),
-    "input_active": (100, 100, 255),
-    "scrollbar": (100, 100, 100),
-    
-    # --- slider sm64 ---
-    "slider_track": (120, 120, 120),
-    "slider_fill": (0, 200, 80),
-    "slider_knob": (255, 255, 255),
-
-    # --- buttons ---
-    "btn_manual": (0, 170, 60),
-    "btn_save": (230, 120, 40),
-    "btn_load": (60, 120, 210),
-    "btn_ctrl": (80, 80, 80), # play/pause/restart
-    "btn_icon": (198, 198, 198), # play triangle/pause bars
-    "btn_confirm": (0, 160, 80),
-    "btn_confirm_hl": (51, 179, 115), # hl means highlight btw not half life
-    "btn_cancel": (160, 60, 60),
-    "btn_cancel_hl": (179, 99, 99),
+PALETTE = { # we can condense the shit out of thiso now cuz we have the jsons
+    "bg_dark": (10, 10, 14), "bg_light": (25, 25, 35), "panel_bg": (20, 20, 25),
+    "overlay": (0, 0, 0, 180), "popup_bg": (40, 40, 40), "popup_border": (0, 200, 80),
+    "hover_outline": (128, 128, 128), "text_main": (240, 240, 255), "text_dim": (200, 200, 200),
+    "text_dark": (0, 0, 0), "text_mode_label": (200, 255, 200),
+    "slot_default": (80, 130, 255), "slot_empty": (60, 60, 60), "slot_vocals": (255, 230, 100),
+    "slot_bass": (100, 255, 150), "slot_drums": (100, 230, 255), "slot_lead": (255, 120, 200),
+    "accent": (80, 130, 255), "input_bg": (30, 30, 30), "input_border": (60, 60, 60),
+    "input_active": (100, 100, 255), "scrollbar": (100, 100, 100),
+    "slider_track": (120, 120, 120), "slider_fill": (0, 200, 80), "slider_knob": (255, 255, 255),
+    "btn_manual": (0, 170, 60), "btn_save": (230, 120, 40), "btn_load": (60, 120, 210),
+    "btn_ctrl": (80, 80, 80), "btn_icon": (198, 198, 198), "btn_confirm": (0, 160, 80),
+    "btn_confirm_hl": (51, 179, 115), "btn_cancel": (160, 60, 60), "btn_cancel_hl": (179, 99, 99),
 }
 
-CIRCLE_COLOR_EMPTY = PALETTE["slot_empty"]
-CIRCLE_COLOR_DEFAULT = PALETTE["slot_default"]
+CIRCLE_COLOR_EMPTY = None
+CIRCLE_COLOR_DEFAULT = None
+STEM_COLORS = {}
+TEXT_COLOR = None
+SLIDER_COLOR = None
+SLIDER_FILL = None
+SLIDER_TIP = None
 
-STEM_COLORS = {
-    "vocals": PALETTE["slot_vocals"],
-    "bass": PALETTE["slot_bass"],
-    "drums": PALETTE["slot_drums"],
-    "lead": PALETTE["slot_lead"]
-}
+TYPER = ["Arial", 20, 22, 28] 
+SMALLERFONT = None
+FONT = None
+BIGFONT = None
 
-TYPER = ["Arial", 20, 22, 28]
-font_face, size_small, size_norm, size_big = TYPER
-SMALLERFONT = pygame.font.SysFont(font_face, size_small)
-FONT = pygame.font.SysFont(font_face, size_norm)
-BIGFONT = pygame.font.SysFont(font_face, size_big)
+def update_fonts(font_name=None):
+    global SMALLERFONT, FONT, BIGFONT, TYPER
+    if font_name:
+        TYPER[0] = font_name
+    
+    try:
+        SMALLERFONT = pygame.font.SysFont(TYPER[0], TYPER[1])
+        FONT = pygame.font.SysFont(TYPER[0], TYPER[2])
+        BIGFONT = pygame.font.SysFont(TYPER[0], TYPER[3])
+    except:
+        SMALLERFONT = pygame.font.SysFont("Arial", TYPER[1])
+        FONT = pygame.font.SysFont("Arial", TYPER[2])
+        BIGFONT = pygame.font.SysFont("Arial", TYPER[3])
 
-CIRCLE_RADIUS = 60
+def update_graphics_constants():
+    global CIRCLE_COLOR_EMPTY, CIRCLE_COLOR_DEFAULT, STEM_COLORS, TEXT_COLOR
+    global SLIDER_COLOR, SLIDER_FILL, SLIDER_TIP
+    
+    CIRCLE_COLOR_EMPTY = PALETTE["slot_empty"]
+    CIRCLE_COLOR_DEFAULT = PALETTE["slot_default"]
 
-TEXT_COLOR = PALETTE["text_main"]
+    STEM_COLORS = {
+        "vocals": PALETTE["slot_vocals"],
+        "bass": PALETTE["slot_bass"],
+        "drums": PALETTE["slot_drums"],
+        "lead": PALETTE["slot_lead"]
+    }
+
+    TEXT_COLOR = PALETTE["text_main"]
+    SLIDER_COLOR = PALETTE["slider_track"]
+    SLIDER_FILL = PALETTE["slider_fill"]
+    SLIDER_TIP = PALETTE["slider_knob"]
+
+def load_theme(theme_name):
+    path = os.path.join("themes", theme_name + ".json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+                for k, v in data.items():
+                    if k in PALETTE:
+                        PALETTE[k] = tuple(v)
+            update_graphics_constants()
+            print(f"Loaded theme: {theme_name}")
+        except Exception as e:
+            print(f"Failed to load theme: {e}")
+    else:
+        print(f"Theme not found: {path}")
+    update_graphics_constants()
+
+update_fonts()
+load_theme("default")
 
 SLIDER_W = 120
 SLIDER_H = 10
-SLIDER_COLOR = PALETTE["slider_track"]
-SLIDER_FILL = PALETTE["slider_fill"]
-SLIDER_TIP = PALETTE["slider_knob"]
+CIRCLE_RADIUS = 60
 
-btn_offset_off=pygame.image.load('gui/btn_offset_off.png').convert_alpha()
-btn_offset_on=pygame.image.load('gui/btn_offset_on.png').convert_alpha()
-btn_offset_hover=pygame.image.load('gui/btn_offset_hover.png').convert_alpha()
+try:
+    btn_offset_off=pygame.image.load('gui/btn_offset_off.png').convert_alpha()
+    btn_offset_on=pygame.image.load('gui/btn_offset_on.png').convert_alpha()
+    btn_offset_hover=pygame.image.load('gui/btn_offset_hover.png').convert_alpha()
+except:
+    # this shouldn't happen
+    btn_offset_off = pygame.Surface((32,32)); btn_offset_off.fill((100,100,100))
+    btn_offset_on = pygame.Surface((32,32)); btn_offset_on.fill((200,200,100))
+    btn_offset_hover = pygame.Surface((32,32)); btn_offset_hover.fill((150,150,150))
 
 # -------------------- ochame kinous -------------------- 
+
+def get_display_key(key_str):
+    if not key_str: return "???"
+    idx = KEY_TO_INT.get(key_str, 0) 
+    return KEYS_FLAT[idx] if USE_FLATS else KEYS_SHARP[idx]
 
 def key_shift_semitones(target_key, source_key):
     # calc semitone diff
@@ -398,6 +433,10 @@ class Dropdown:
         self.scroll_y = 0 
 
     def draw(self, screen):
+        self.bg_color = PALETTE["input_bg"]
+        self.text_color = PALETTE["text_main"]
+        self.border_color = PALETTE["scrollbar"]
+        
         pygame.draw.rect(screen, self.bg_color, self.rect)
         pygame.draw.rect(screen, self.border_color, self.rect, 2)
         
@@ -546,6 +585,18 @@ use_relative_mode = False
 audio_engine = AudioEngine(slots, sample_rate)
 audio_engine.start()
 
+options_open = False
+available_themes = [f.replace(".json","") for f in os.listdir("themes") if f.endswith(".json")]
+available_fonts = pygame.font.get_fonts()
+available_fonts.sort()
+if "arial" not in available_fonts and len(available_fonts) > 0:
+    available_fonts.insert(0, "arial")
+
+# option s
+opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=0)
+opt_font_dd = Dropdown(350, 270, 200, 35, available_fonts, default_index=available_fonts.index("arial") if "arial" in available_fonts else 0, max_display_items=8)
+opt_notation_btn = pygame.Rect(350, 340, 200, 35)
+
 def reset_master():
     global master_bpm, master_key, master_scale
     master_bpm = None
@@ -553,12 +604,17 @@ def reset_master():
     master_scale = None
 
 def get_song_list():
-    # scan folders
-    base = "Songs"
-    if not os.path.exists(base):
-        os.makedirs(base)
-        return []
-    return [os.path.join(base, x) for x in os.listdir(base) if os.path.isdir(os.path.join(base, x))]
+    all_songs = []
+    
+    for folder in SONG_FOLDERS:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            continue
+
+        songs = [os.path.join(folder, x) for x in os.listdir(folder) if os.path.isdir(os.path.join(folder, x))]
+        all_songs.extend(songs)
+        
+    return all_songs
 
 def add_stem_to_slot(slot_id, song_folder, stem_type):
     global master_bpm, master_key, master_scale
@@ -757,17 +813,23 @@ def load_project(screen_surface):
             song_name = slot_data["song_name"]
             stem_type = slot_data["type"]
             
-            song_path = os.path.join("Songs", song_name)
+            song_path = None
             
-            if os.path.exists(song_path):
+            for folder in SONG_FOLDERS:
+                potential_path = os.path.join(folder, song_name)
+                if os.path.exists(potential_path):
+                    song_path = potential_path
+                    break
+            
+            if song_path:
                 add_stem_to_slot(idx, song_path, stem_type)
                 
                 s = slots[idx]
                 s.volume = slot_data["volume"]
                 s.target_volume = slot_data["volume"]
                 s.half = slot_data["half"]
-                pass
-
+                
+                pass 
             else:
                 print(f"'{song_name}' not found during load.")
 
@@ -803,9 +865,9 @@ while running:
     for y in range(0, SCREEN_H, grid_size):
         pygame.draw.line(screen, PALETTE["bg_light"], (0, y), (SCREEN_W, y))
 
-    mx, my = pygame.mouse.get_pos() # where tf are we
+    mx, my = pygame.mouse.get_pos() 
 
-    input_blocked = panel_open or manual_override_open
+    input_blocked = panel_open or manual_override_open or options_open
 
     # slider sm64
     lerp_speed = 0.33
@@ -833,8 +895,8 @@ while running:
     screen.blit(FONT.render("Set Manual Tuning", True, PALETTE["text_main"]), (30, 28))
 
     # save and load buttons
-    btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40) # (removed border_radius from here why the fuck was it here)
-    btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
+    btn_save_rect = pygame.Rect(SCREEN_W - 320, 20, 90, 40)
+    btn_load_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40)
 
     save_col = PALETTE["btn_save"]
     load_col = PALETTE["btn_load"]
@@ -858,6 +920,18 @@ while running:
     screen.blit(FONT.render("Save", True, PALETTE["text_main"]), (btn_save_rect.x + 20, btn_save_rect.y + 8))
     screen.blit(FONT.render("Load", True, PALETTE["text_main"]), (btn_load_rect.x + 20, btn_load_rect.y + 8))
 
+    # option button
+    btn_opt_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
+    
+    if btn_opt_rect.collidepoint(mx, my) and not input_blocked:
+        opt_outline = lighten_color(PALETTE["btn_ctrl"], 1.2)
+    else:
+        opt_outline = darken_color(PALETTE["btn_ctrl"])
+        
+    pygame.draw.rect(screen, PALETTE["btn_ctrl"], btn_opt_rect, border_radius=4)
+    pygame.draw.rect(screen, opt_outline, btn_opt_rect, 4, border_radius=4)
+    screen.blit(FONT.render("Options", True, PALETTE["text_main"]), (btn_opt_rect.x + 12, btn_opt_rect.y + 8))
+
     # what
     pulse_val = 0.0
     if audio_engine.stream and audio_engine.stream.active:
@@ -866,7 +940,6 @@ while running:
     if master_bpm and master_bpm > 0:
         ms_per_beat = 60000 / master_bpm
         
-
         raw_sin = math.sin((pulse_timer * 2 * math.pi) / ms_per_beat - (math.pi / 2))
         
         steepness = 3.0
@@ -996,6 +1069,7 @@ while running:
     # stem select
     if panel_open:
         pygame.draw.rect(screen, PALETTE["input_bg"], (220, 125, 400, 300))
+        pygame.draw.rect(screen, PALETTE["input_border"], (220, 125, 400, 300), 2)
         
         title = BIGFONT.render(f"Slot {selected_slot}", True, TEXT_COLOR)
         screen.blit(title, (300, 135))
@@ -1030,6 +1104,7 @@ while running:
     # manual tune
     if manual_override_open:
         pygame.draw.rect(screen, PALETTE["input_bg"], (170, 120, 500, 300))
+        pygame.draw.rect(screen, PALETTE["input_border"], (170, 120, 500, 300), 2)
         
         title = BIGFONT.render("Manual Tuning Menu", True, TEXT_COLOR)
         screen.blit(title, (280, 135))
@@ -1065,6 +1140,42 @@ while running:
         mt_key.draw_list(screen)
         mt_scale.draw_list(screen)
 
+    # options
+    if options_open:
+        pygame.draw.rect(screen, PALETTE["input_bg"], (220, 100, 400, 450))
+        pygame.draw.rect(screen, PALETTE["input_border"], (220, 100, 400, 450), 2)
+        
+        title = BIGFONT.render("Options", True, TEXT_COLOR)
+        screen.blit(title, (360, 115))
+        
+        screen.blit(FONT.render("Theme:", True, TEXT_COLOR), (250, 205))
+        opt_theme_dd.draw(screen)
+        
+        screen.blit(FONT.render("Font:", True, TEXT_COLOR), (250, 275))
+        opt_font_dd.draw(screen)
+        
+        screen.blit(FONT.render("Notation:", True, TEXT_COLOR), (250, 345))
+        
+        not_col = PALETTE["input_active"] if USE_FLATS else PALETTE["btn_manual"]
+        not_text = "Flats (b)" if USE_FLATS else "Sharps (#)"
+        
+        pygame.draw.rect(screen, not_col, opt_notation_btn)
+        pygame.draw.rect(screen, PALETTE["text_dark"], opt_notation_btn, 2)
+        
+        not_surf = FONT.render(not_text, True, PALETTE["text_main"])
+        screen.blit(not_surf, (opt_notation_btn.centerx - not_surf.get_width()//2, opt_notation_btn.centery - not_surf.get_height()//2))
+
+        opt_close_rect = pygame.Rect(335, 480, 170, 50)
+        if opt_close_rect.collidepoint(mx, my):
+             pygame.draw.rect(screen, PALETTE["btn_confirm_hl"], opt_close_rect)
+        else:
+             pygame.draw.rect(screen, PALETTE["btn_confirm"], opt_close_rect)
+        
+        screen.blit(BIGFONT.render("CLOSE", True, TEXT_COLOR), (375, 490))
+
+        opt_theme_dd.draw_list(screen)
+        opt_font_dd.draw_list(screen)
+
     # -------------------- the fukin input clicky handler -------------------- 
 
     for event in pygame.event.get():
@@ -1072,6 +1183,32 @@ while running:
             running = False
 
         mx, my = pygame.mouse.get_pos()
+        
+        if options_open:
+            if opt_theme_dd.handle_event(event):
+                sel = opt_theme_dd.get_selected()
+                if sel: load_theme(sel)
+                continue
+                
+            if opt_font_dd.handle_event(event):
+                sel = opt_font_dd.get_selected()
+                if sel: 
+                    update_fonts(sel)
+                    mt_bpm.font = FONT
+                    mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, PALETTE["text_main"])
+                    opt_theme_dd.font = SMALLERFONT
+                    opt_font_dd.font = SMALLERFONT
+                continue
+            
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if opt_notation_btn.collidepoint(mx, my):
+                    USE_FLATS = not USE_FLATS
+                
+                opt_close_rect = pygame.Rect(335, 480, 170, 50)
+                if opt_close_rect.collidepoint(mx, my):
+                    options_open = False
+            
+            continue
 
         # manual tuning inputs
         if manual_override_open:
@@ -1132,9 +1269,6 @@ while running:
                             
                             pygame.draw.rect(screen, PALETTE["popup_bg"], wait_rect)
                             pygame.draw.rect(screen, PALETTE["popup_border"], wait_rect, 3)
-                            header_text = FONT.render("currently tuning:", True, PALETTE["text_dim"])
-                            info_text = FONT.render(info_str, True, PALETTE["text_main"])
-                            draw_dynamic_text(..., PALETTE["text_main"])
 
                             pygame.display.flip()
 
@@ -1223,8 +1357,11 @@ while running:
                 if master_scale and master_scale in mt_scale.options:
                     mt_scale.index = mt_scale.options.index(master_scale)
 
-            btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40)
-            btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
+            if btn_opt_rect.collidepoint(mx, my):
+                options_open = True
+                available_themes = [f.replace(".json","") for f in os.listdir("themes") if f.endswith(".json")]
+                opt_theme_dd.update_options(available_themes)
+                continue
 
             if btn_save_rect.collidepoint(mx, my) and event.button == 1:
                 save_project()
@@ -1315,7 +1452,8 @@ while running:
 
     # the text
     if master_bpm is not None:
-        stats_text = f"BPM: {master_bpm:.1f} | KEY: {master_key} {master_scale}"
+        display_k = get_display_key(master_key)
+        stats_text = f"BPM: {master_bpm:.1f} | KEY: {display_k} {master_scale}"
     else:
         stats_text = "No Tuning Set"
     
