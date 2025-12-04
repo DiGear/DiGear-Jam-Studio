@@ -1280,8 +1280,8 @@ while running:
                     pygame.draw.rect(screen, PALETTE["panel_bg"], wait_rect)
                     pygame.draw.rect(screen, PALETTE["slider_fill"], wait_rect, 3)
 
-                    wait_text = BIGFONT.render("Processing...", True, PALETTE["text_main"])
-                    sub_text = FONT.render("Please Wait", True, PALETTE["text_dim"])
+                    wait_text = BIGFONT.render("processing...", True, PALETTE["text_main"])
+                    sub_text = FONT.render("please wait", True, PALETTE["text_dim"])
                     
                     screen.blit(wait_text, (wait_rect.centerx - wait_text.get_width()//2, wait_rect.y + 20))
                     screen.blit(sub_text, (wait_rect.centerx - sub_text.get_width()//2, wait_rect.y + 60))
@@ -1314,8 +1314,11 @@ while running:
                             print(f"reloading slot {data['id']}")
                             info_str = f"{data['name']} ({data['type']})"
                             
-                            pygame.draw.rect(screen, PALETTE["popup_bg"], wait_rect)
-                            pygame.draw.rect(screen, PALETTE["popup_border"], wait_rect, 3)
+                            pygame.draw.rect(screen, PALETTE["panel_bg"], wait_rect)
+                            pygame.draw.rect(screen, PALETTE["slider_fill"], wait_rect, 3)
+
+                            screen.blit(wait_text, (wait_rect.centerx - wait_text.get_width()//2, wait_rect.y + 20))
+                            screen.blit(sub_text, (wait_rect.centerx - sub_text.get_width()//2, wait_rect.y + 60))
 
                             pygame.display.flip()
 
