@@ -679,7 +679,7 @@ def clear_slot(i):
     
 def shift_slot(i):
     slot = slots[i]
-    slot.half = 1 if slot.half == 0 else 0\
+    slot.half = 1 if slot.half == 0 else 0
 
 def toggle_playback():
     if audio_engine.stream and audio_engine.stream.active:
