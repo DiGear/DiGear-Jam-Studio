@@ -19,7 +19,120 @@ sample_rate = 44100
 BUFFER_SIZE = 2048
 CHANNELS = 2
 
+# ----------- squif game -----------
+
+pygame.init()
+
+SCREEN_W, SCREEN_H = 840, 825
+screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+
+pygame.display.set_caption("DiGear Jam Studio")
+
+favicon = pygame.image.load("favicon.png")
+pygame.display.set_icon(favicon)
+
+# ---------- gooey ----------
+
+PALETTE = {
+    # --- main ---
+    "bg_dark": (10, 10, 14),      # main bg
+    "bg_light": (25, 25, 35),     # grid lines
+    "panel_bg": (20, 20, 25),     # panel popouts
+    "overlay": (0, 0, 0, 180),    # dimming overlay
+    
+    # --- text ---
+    "text_main": (240, 240, 255),
+    "text_dim": (200, 200, 200),
+    "text_dark": (0, 0, 0),       # outlines
+
+    # --- slots ---
+    "slot_default": (80, 130, 255),
+    "slot_empty": (60, 60, 60),
+    "slot_hover": (128, 128, 128),
+    "slot_vocals": (255, 230, 100),
+    "slot_bass": (100, 255, 150),
+    "slot_drums": (100, 230, 255),
+    "slot_lead": (255, 120, 200),
+
+    # --- other shit ---
+    "accent": (0, 255, 128),
+    "input_bg": (30, 30, 30),
+    "input_border": (60, 60, 60),
+    "input_active": (100, 100, 255),
+    "scrollbar": (100, 100, 100),
+    
+    # --- slider sm64 ---
+    "slider_track": (120, 120, 120),
+    "slider_fill": (0, 200, 80),
+    "slider_knob": (255, 255, 255),
+
+    # --- buttons ---
+    "btn_manual": (0, 170, 60),
+    "btn_save": (230, 120, 40),
+    "btn_load": (60, 120, 210),
+    "btn_ctrl": (80, 80, 80),     # play/pause/restart
+    "btn_icon": (198, 198, 198),  # play triangle/pause bars
+    "btn_confirm": (0, 160, 80),
+    "btn_confirm_hl": (51, 179, 115), # hl means highlight btw not half life
+    "btn_cancel": (160, 60, 60),
+    "btn_cancel_hl": (179, 99, 99),
+}
+
+CIRCLE_COLOR_EMPTY = PALETTE["slot_empty"]
+CIRCLE_COLOR_DEFAULT = PALETTE["slot_default"]
+
+STEM_COLORS = {
+    "vocals": PALETTE["slot_vocals"],
+    "bass": PALETTE["slot_bass"],
+    "drums": PALETTE["slot_drums"],
+    "lead": PALETTE["slot_lead"]
+}
+
+TYPER = ["Arial", 20, 22, 28]
+font_face, size_small, size_norm, size_big = TYPER
+SMALLERFONT = pygame.font.SysFont(font_face, size_small)
+FONT = pygame.font.SysFont(font_face, size_norm)
+BIGFONT = pygame.font.SysFont(font_face, size_big)
+
+CIRCLE_RADIUS = 60
+
+TEXT_COLOR = PALETTE["text_main"]
+
+SLIDER_W = 120
+SLIDER_H = 10
+SLIDER_COLOR = PALETTE["slider_track"]
+SLIDER_FILL = PALETTE["slider_fill"]
+SLIDER_TIP = PALETTE["slider_knob"]
+
+btn_offset_off=pygame.image.load('gui/btn_offset_off.png').convert_alpha()
+btn_offset_on=pygame.image.load('gui/btn_offset_on.png').convert_alpha()
+btn_offset_hover=pygame.image.load('gui/btn_offset_hover.png').convert_alpha()
+
 # -------------------- ochame kinous -------------------- 
+
+def create_glow_surface(radius, color):
+    surf = pygame.Surface((radius * 2, radius *2), pygame.SRCALPHA)
+    r, g, b = color
+    for i in range(radius, 0, -2):
+        alpha = int(255 * (1 - (i / radius))**2)
+        pygame.draw.circle(surf, (r, g, b, alpha // 4), (radius, radius), i)
+    return surf
+
+def draw_vignette(screen):
+    vig = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+    pygame.draw.rect(vig, (0,0,0,0), vig.get_rect())
+    pygame.draw.rect(vig, (0,0,0,100), (0,0,SCREEN_W, SCREEN_H), 150) 
+    screen.blit(vig, (0,0))
+
+def draw_glass_panel(rect):
+    s = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    s.fill(PALETTE["panel_bg"])
+    screen.blit(s, (rect.x, rect.y))
+
+    pygame.draw.rect(screen, (60, 60, 70), rect, 1, border_radius=4)
+    pygame.draw.line(screen, (100, 100, 120), (rect.x+1, rect.y), (rect.right-1, rect.y))
+
+base_glow_img = create_glow_surface(int(CIRCLE_RADIUS * 1.5), (255, 255, 255))
 
 def key_shift_semitones(target_key, source_key):
     # calc semitone diff
@@ -45,13 +158,85 @@ def bpm_with_multipliers(original_bpm, master_bpm):
         ]
     return min(candidates, key=lambda b: abs(b - master_bpm))
 
-def get_song_list():
-    # scan folders
-    base = "Songs"
-    if not os.path.exists(base):
-        os.makedirs(base)
-        return []
-    return [os.path.join(base, x) for x in os.listdir(base) if os.path.isdir(os.path.join(base, x))]
+def darken_color(color, factor=0.6): # one less hard-coded thing
+    r, g, b = color
+    return (int(r * factor), int(g * factor), int(b * factor))
+
+def lighten_color(color, factor=1.5):
+    r, g, b = color
+    return (min(255, int(r * factor)), min(255, int(g * factor)), min(255, int(b * factor)))
+
+def lerp_color(c1, c2, t):
+    return (
+        int(c1[0] + (c2[0] - c1[0]) * t),
+        int(c1[1] + (c2[1] - c1[1]) * t),
+        int(c1[2] + (c2[2] - c1[2]) * t)
+    )
+
+def load_stem_direct(path):
+    audio, sr = sf.read(path, dtype='float32')
+    if audio.ndim == 1:
+        audio = np.stack([audio, audio], axis=1)
+    if sr != sample_rate:
+        print(f"Warning: samplerate mismatch in {path}")
+    peak = np.max(np.abs(audio))
+    if peak > 0:
+        audio = audio / peak
+    return audio
+
+def draw_slider(x, y, w, h, value):
+    track_outline_col = darken_color(SLIDER_COLOR, factor=0.4)
+    knob_outline_col = darken_color(SLIDER_TIP, factor=0.4)
+    pygame.draw.rect(screen, SLIDER_COLOR, (x, y, w, h))
+    filled = int(w * value)
+    if filled > 0:
+        pygame.draw.rect(screen, SLIDER_FILL, (x, y, filled, h))
+    pygame.draw.rect(screen, track_outline_col, (x, y, w, h), 2)
+    knob_x = x + filled
+    knob_y = y + h // 2
+    knob_radius = h // 2 + 2
+    pygame.draw.circle(screen, SLIDER_TIP, (knob_x, knob_y), knob_radius)
+    pygame.draw.circle(screen, knob_outline_col, (knob_x, knob_y), knob_radius, 2)
+    
+def draw_offset_button(x, y, state):
+    mx, my = pygame.mouse.get_pos()
+
+    if state == False:
+        screen.blit(btn_offset_off, (x,y))
+    else:
+        screen.blit(btn_offset_on, (x,y))
+        
+    #hover highlight
+    if x <= mx < x+32 and y <= my < y+32 and not input_blocked:
+        screen.blit(btn_offset_hover, (x,y))
+
+def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color):
+    # draws text with outline and scales if too big
+    if not text:
+        return
+
+    text_surf = font.render(text, True, color)
+    outline_surf = font.render(text, True, (0, 0, 0))
+
+    width, height = text_surf.get_size()
+    if width > max_width:
+        scale_factor = max_width / width
+        new_width = int(width * scale_factor)
+        new_height = int(height * scale_factor)
+        text_surf = pygame.transform.smoothscale(text_surf, (new_width, new_height))
+        outline_surf = pygame.transform.smoothscale(outline_surf, (new_width, new_height))
+
+    rect = text_surf.get_rect(center=(center_x, center_y))
+
+    # draw outline
+    offsets = [
+        (-1, -1), (0, -1), (1, -1),
+        (-1,  0),          (1,  0),
+        (-1,  1), (0,  1), (1,  1)
+    ]
+    for dx, dy in offsets:
+        surface.blit(outline_surf, (rect.x + dx, rect.y + dy))
+    surface.blit(text_surf, rect)
 
 # -------------------- classes -------------------- 
 
@@ -68,19 +253,6 @@ class Slot:
         self.target_volume = 1.0
         self.offset = 0
         self.half = 0
-
-# init slots
-slots = [Slot() for _ in range(12)]
-master_bpm = None
-master_key = None
-master_scale = None
-manual_override_open = False
-
-def reset_master():
-    global master_bpm, master_key, master_scale
-    master_bpm = None
-    master_key = None
-    master_scale = None
 
 class AudioEngine:
     def __init__(self, slots, samplerate=44100):
@@ -177,268 +349,7 @@ class AudioEngine:
             self.stream.close()
             print("audio engine stopped")
 
-def clear_slot(i):
-    slot = slots[i]
-    slot.empty = True
-    slot.stem = None
-    slot.song_name = None
-    slot.type = None
-    slot.volume = 1.0
-    slot.target_volume = 1.0
-    slot.offset = 0
-    slot.half = 0
-    print(f"slot {i} cleared")
-    
-def shift_slot(i):
-    slot = slots[i]
-    if slot.half == 0:
-        slot.half = 1
-        slot.offset = audio_engine.max_length // 2
-    else:
-        slot.half = 0
-        slot.offset = 0
-
-def add_stem_to_slot(slot_id, song_folder, stem_type):
-    global master_bpm, master_key, master_scale
-
-    meta_path = os.path.join(song_folder, "meta.json")
-    with open(meta_path, "r") as f:
-        meta = json.load(f)
-
-    song_key = meta["key"]
-    song_bpm = meta["bpm"]
-
-    print(f"\nloading stem '{stem_type}' from {song_folder}")
-
-    # set master if first track
-    if master_bpm is None:
-        master_bpm = song_bpm
-        master_key = song_key
-        master_scale = meta.get("scale", "major")
-        print(f"Master set to {master_key} {master_scale}")
-    
-    file_to_load = ""
-    loaded_scale = ""
-    
-    if stem_type == "drums":
-        file_to_load = "drums.ogg"
-        loaded_scale = "neutral"
-    else:
-        target_scale = master_scale
-
-        target_path = os.path.join(song_folder, f"{stem_type}_{target_scale}.ogg")
-        
-        if os.path.exists(target_path):
-            file_to_load = f"{stem_type}_{target_scale}.ogg"
-            loaded_scale = target_scale
-        else:
-            fallback_scale = "minor" if target_scale == "major" else "major"
-            fallback_path = os.path.join(song_folder, f"{stem_type}_{fallback_scale}.ogg")
-            
-            if os.path.exists(fallback_path):
-                file_to_load = f"{stem_type}_{fallback_scale}.ogg"
-                loaded_scale = fallback_scale
-                print(f"no matching mode file found: falling back to the relative mode of {loaded_scale}")
-            else:
-                print(f"ERROR: No stem files found for {stem_type}")
-                return
-
-    # load Audio
-    full_path = os.path.join(song_folder, file_to_load)
-    stem_audio = load_stem_direct(full_path)
-
-    # time Stretch
-    adjusted_bpm = bpm_with_multipliers(song_bpm, master_bpm)
-    stretch_ratio = master_bpm / adjusted_bpm
-    if stretch_ratio != 1.0:
-        print(f"time stretch: {song_bpm} -> {adjusted_bpm} -> {master_bpm}")
-        stem_audio = rb.time_stretch(stem_audio, sample_rate, stretch_ratio)
-
-    # pitch shift (now with fallback shit)
-    if stem_type != "drums":
-        semis = key_shift_semitones(master_key, song_key)
-        if loaded_scale == master_scale:
-            pass
-            
-        elif loaded_scale != "neutral":
-            print("relative mode third offset haha funny")
-            if loaded_scale == "minor" and master_scale == "major":
-                semis -= 3
-            elif loaded_scale == "major" and master_scale == "minor":
-                semis += 3
-
-        if semis != 0:
-            print(f"pitch shift {semis:+d} semitones")
-            stem_audio = rb.pitch_shift(stem_audio, sample_rate, semis)
-
-    # sync length
-    if audio_engine.max_length == 0:
-        audio_engine.max_length = len(stem_audio)
-    
-    master_length = audio_engine.max_length
-    cur_len = len(stem_audio)
-    
-    # micro stretch to align samples exactly
-    if cur_len != master_length:
-        ratio = master_length / cur_len
-        if 0.5 < ratio < 2.0: 
-            stem_audio = rb.time_stretch(stem_audio, sample_rate, 1 / ratio)
-            if len(stem_audio) > master_length:
-                stem_audio = stem_audio[:master_length]
-            elif len(stem_audio) < master_length:
-                pad = master_length - len(stem_audio)
-                stem_audio = np.vstack((stem_audio, np.zeros((pad, stem_audio.shape[1]), dtype=np.float32)))
-
-    slot = slots[slot_id]
-    slot.empty = False
-    slot.stem = stem_audio
-    slot.song_name = os.path.basename(song_folder)
-    slot.type = stem_type
-    slot.key = song_key
-    slot.scale = loaded_scale
-    slot.bpm = song_bpm
-    slot.offset = 0
-    slot.half = 0
-
-    print("stem loaded")
-    audio_engine.update_max_length()
-
-audio_engine = AudioEngine(slots, sample_rate)
-audio_engine.start()
-
-def toggle_playback():
-    if audio_engine.stream and audio_engine.stream.active:
-        audio_engine.stop()
-    else:
-        audio_engine.start()
-
-# -------------------- DETERMINATION -------------------- 
-
-def save_project():
-    data = {
-        "master": {
-            "bpm": master_bpm,
-            "key": master_key,
-            "scale": master_scale
-        },
-        "slots": []
-    }
-
-    for i, slot in enumerate(slots):
-        if not slot.empty:
-            slot_data = {
-                "index": i,
-                "song_name": slot.song_name,
-                "type": slot.type,
-                "volume": slot.volume,
-                "half": slot.half,
-
-                # master override is like also a thing tho
-                "detected_key": slot.key, 
-                "detected_scale": slot.scale
-            }
-            data["slots"].append(slot_data)
-    
-    with open("project_data.json", "w") as f:
-        json.dump(data, f, indent=4)
-    print("project saved to project_data.json")
-
-def load_project(screen_surface):
-    if not os.path.exists("project_data.json"):
-        print("no SAVE found")
-        return
-
-    overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180))
-    screen_surface.blit(overlay, (0, 0))
-
-    wait_w, wait_h = 300, 100
-    wait_rect = pygame.Rect((SCREEN_W - wait_w)//2, (SCREEN_H - wait_h)//2, wait_w, wait_h)
-    pygame.draw.rect(screen_surface, (40, 40, 40), wait_rect)
-    pygame.draw.rect(screen_surface, (0, 200, 80), wait_rect, 3)
-
-    wait_text = BIGFONT.render("loading project", True, (255, 255, 255))
-    screen_surface.blit(wait_text, (wait_rect.centerx - wait_text.get_width()//2, wait_rect.centery - 15))
-    pygame.display.flip()
-
-    try:
-        with open("project_data.json", "r") as f:
-            data = json.load(f)
-
-        audio_engine.stop()
-
-        global master_bpm, master_key, master_scale
-        master_bpm = data["master"]["bpm"]
-        master_key = data["master"]["key"]
-        master_scale = data["master"]["scale"]
-        
-        for i in range(12):
-            clear_slot(i)
-        
-        audio_engine.max_length = 0
-
-        for slot_data in data["slots"]:
-            idx = slot_data["index"]
-            song_name = slot_data["song_name"]
-            stem_type = slot_data["type"]
-            
-            song_path = os.path.join("Songs", song_name)
-            
-            if os.path.exists(song_path):
-                add_stem_to_slot(idx, song_path, stem_type)
-                
-                s = slots[idx]
-                s.volume = slot_data["volume"]
-                s.target_volume = slot_data["volume"]
-                s.half = slot_data["half"]
-                
-                if s.half == 1 and not s.empty:
-                     s.offset = audio_engine.max_length // 2
-            else:
-                print(f"'{song_name}' not found during load.")
-
-        audio_engine.start()
-        print("project loaded successfully")
-
-    except Exception as e:
-        print(f"error loading project: {e}")
-
 # -------------------- fuckin pygame STUPID SHIT FUCK I HATE PYGAME AAAAA -------------------- 
-
-pygame.init()
-SCREEN_W, SCREEN_H = 840, 825
-screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-pygame.display.set_caption("DiGear Jam Studio")
-favicon = pygame.image.load("favicon.png")
-pygame.display.set_icon(favicon)
-FONT = pygame.font.SysFont("Arial", 22)
-BIGFONT = pygame.font.SysFont("Arial", 28)
-
-#images
-btn_offset_off=pygame.image.load('gui/btn_offset_off.png').convert_alpha()
-btn_offset_on=pygame.image.load('gui/btn_offset_on.png').convert_alpha()
-btn_offset_hover=pygame.image.load('gui/btn_offset_hover.png').convert_alpha()
-
-
-# colors
-CIRCLE_RADIUS = 60
-CIRCLE_COLOR_EMPTY = (60, 60, 60)
-CIRCLE_COLOR_DEFAULT = (80, 130, 255)
-
-STEM_COLORS = {
-    "vocals": (230, 230, 100),
-    "bass": (136, 213, 109),
-    "drums": (102, 215, 215),
-    "lead": (210, 132, 195)
-}
-
-TEXT_COLOR = (255, 255, 255)
-
-SLIDER_W = 120
-SLIDER_H = 10
-SLIDER_COLOR = (120, 120, 120)
-SLIDER_FILL = (0, 200, 80)
-SLIDER_TIP = (255, 255, 255)
 
 class InputBox:
     def __init__(self, x, y, w, h, text=''):
@@ -447,7 +358,7 @@ class InputBox:
         self.color_active = (100, 100, 255)
         self.color = self.color_inactive
         self.text = text
-        self.font = pygame.font.SysFont("Arial", 22)
+        self.font = FONT
         self.txt_surface = self.font.render(text, True, (255, 255, 255))
         self.active = False
 
@@ -486,7 +397,7 @@ class Dropdown:
         self.options = options
         self.index = default_index
         self.is_open = False
-        self.font = pygame.font.SysFont("Arial", 20)
+        self.font = SMALLERFONT
         self.active_option_color = (60, 60, 60)
         self.hover_color = (80, 80, 100)
         self.bg_color = (40, 40, 40)
@@ -641,6 +552,13 @@ class Dropdown:
 
 # -------------------- global state -------------------- 
 
+# init slots
+slots = [Slot() for _ in range(12)]
+master_bpm = None
+master_key = None
+master_scale = None
+manual_override_open = False
+
 dragging_slider = None
 panel_open = False
 selected_slot = None
@@ -648,16 +566,245 @@ selected_slot = None
 # relative/parallel mode shit
 use_relative_mode = False
 
-def load_stem_direct(path):
-    audio, sr = sf.read(path, dtype='float32')
-    if audio.ndim == 1:
-        audio = np.stack([audio, audio], axis=1)
-    if sr != sample_rate:
-        print(f"Warning: samplerate mismatch in {path}")
-    peak = np.max(np.abs(audio))
-    if peak > 0:
-        audio = audio / peak
-    return audio
+audio_engine = AudioEngine(slots, sample_rate)
+audio_engine.start()
+
+def reset_master():
+    global master_bpm, master_key, master_scale
+    master_bpm = None
+    master_key = None
+    master_scale = None
+
+def get_song_list():
+    # scan folders
+    base = "Songs"
+    if not os.path.exists(base):
+        os.makedirs(base)
+        return []
+    return [os.path.join(base, x) for x in os.listdir(base) if os.path.isdir(os.path.join(base, x))]
+
+def add_stem_to_slot(slot_id, song_folder, stem_type):
+    global master_bpm, master_key, master_scale
+
+    meta_path = os.path.join(song_folder, "meta.json")
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+
+    song_key = meta["key"]
+    song_bpm = meta["bpm"]
+
+    print(f"\nloading stem '{stem_type}' from {song_folder}")
+
+    # set master if first track
+    if master_bpm is None:
+        master_bpm = song_bpm
+        master_key = song_key
+        master_scale = meta.get("scale", "major")
+        print(f"Master set to {master_key} {master_scale}")
+    
+    file_to_load = ""
+    loaded_scale = ""
+    
+    if stem_type == "drums":
+        file_to_load = "drums.ogg"
+        loaded_scale = "neutral"
+    else:
+        target_scale = master_scale
+
+        target_path = os.path.join(song_folder, f"{stem_type}_{target_scale}.ogg")
+        
+        if os.path.exists(target_path):
+            file_to_load = f"{stem_type}_{target_scale}.ogg"
+            loaded_scale = target_scale
+        else:
+            fallback_scale = "minor" if target_scale == "major" else "major"
+            fallback_path = os.path.join(song_folder, f"{stem_type}_{fallback_scale}.ogg")
+            
+            if os.path.exists(fallback_path):
+                file_to_load = f"{stem_type}_{fallback_scale}.ogg"
+                loaded_scale = fallback_scale
+                print(f"no matching mode file found: falling back to the relative mode of {loaded_scale}")
+            else:
+                print(f"ERROR: No stem files found for {stem_type}")
+                return
+
+    # load Audio
+    full_path = os.path.join(song_folder, file_to_load)
+    stem_audio = load_stem_direct(full_path)
+
+    # time Stretch
+    adjusted_bpm = bpm_with_multipliers(song_bpm, master_bpm)
+    stretch_ratio = master_bpm / adjusted_bpm
+    if stretch_ratio != 1.0:
+        print(f"time stretch: {song_bpm} -> {adjusted_bpm} -> {master_bpm}")
+        stem_audio = rb.time_stretch(stem_audio, sample_rate, stretch_ratio)
+
+    # pitch shift (now with fallback shit)
+    if stem_type != "drums":
+        semis = key_shift_semitones(master_key, song_key)
+        if loaded_scale == master_scale:
+            pass
+            
+        elif loaded_scale != "neutral":
+            print("relative mode third offset haha funny")
+            if loaded_scale == "minor" and master_scale == "major":
+                semis -= 3
+            elif loaded_scale == "major" and master_scale == "minor":
+                semis += 3
+
+        if semis != 0:
+            print(f"pitch shift {semis:+d} semitones")
+            stem_audio = rb.pitch_shift(stem_audio, sample_rate, semis)
+
+    # sync length
+    if audio_engine.max_length == 0:
+        audio_engine.max_length = len(stem_audio)
+    
+    master_length = audio_engine.max_length
+    cur_len = len(stem_audio)
+    
+    # micro stretch to align samples exactly
+    if cur_len != master_length:
+        ratio = master_length / cur_len
+        if 0.5 < ratio < 2.0: 
+            stem_audio = rb.time_stretch(stem_audio, sample_rate, 1 / ratio)
+            if len(stem_audio) > master_length:
+                stem_audio = stem_audio[:master_length]
+            elif len(stem_audio) < master_length:
+                pad = master_length - len(stem_audio)
+                stem_audio = np.vstack((stem_audio, np.zeros((pad, stem_audio.shape[1]), dtype=np.float32)))
+
+    slot = slots[slot_id]
+    slot.empty = False
+    slot.stem = stem_audio
+    slot.song_name = os.path.basename(song_folder)
+    slot.type = stem_type
+    slot.key = song_key
+    slot.scale = loaded_scale
+    slot.bpm = song_bpm
+    slot.offset = 0
+    slot.half = 0
+
+    print("stem loaded")
+    audio_engine.update_max_length()
+
+def clear_slot(i):
+    slot = slots[i]
+    slot.empty = True
+    slot.stem = None
+    slot.song_name = None
+    slot.type = None
+    slot.volume = 1.0
+    slot.target_volume = 1.0
+    slot.offset = 0
+    slot.half = 0
+    print(f"slot {i} cleared")
+    
+def shift_slot(i):
+    slot = slots[i]
+    if slot.half == 0:
+        slot.half = 1
+        slot.offset = audio_engine.max_length // 2
+    else:
+        slot.half = 0
+        slot.offset = 0
+
+def toggle_playback():
+    if audio_engine.stream and audio_engine.stream.active:
+        audio_engine.stop()
+    else:
+        audio_engine.start()
+
+# -------------------- DETERMINATION -------------------- 
+
+def save_project():
+    data = {
+        "master": {
+            "bpm": master_bpm,
+            "key": master_key,
+            "scale": master_scale
+        },
+        "slots": []
+    }
+
+    for i, slot in enumerate(slots):
+        if not slot.empty:
+            slot_data = {
+                "index": i,
+                "song_name": slot.song_name,
+                "type": slot.type,
+                "volume": slot.volume,
+                "half": slot.half,
+
+                # master override is like also a thing tho
+                "detected_key": slot.key, 
+                "detected_scale": slot.scale
+            }
+            data["slots"].append(slot_data)
+    
+    with open("project_data.json", "w") as f:
+        json.dump(data, f, indent=4)
+    print("project saved to project_data.json")
+
+def load_project(screen_surface):
+    if not os.path.exists("project_data.json"):
+        print("no SAVE found")
+        return
+
+    overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))
+    screen_surface.blit(overlay, (0, 0))
+
+    wait_w, wait_h = 300, 100
+    wait_rect = pygame.Rect((SCREEN_W - wait_w)//2, (SCREEN_H - wait_h)//2, wait_w, wait_h)
+    pygame.draw.rect(screen_surface, (40, 40, 40), wait_rect)
+    pygame.draw.rect(screen_surface, (0, 200, 80), wait_rect, 3)
+
+    wait_text = BIGFONT.render("loading project", True, (255, 255, 255))
+    screen_surface.blit(wait_text, (wait_rect.centerx - wait_text.get_width()//2, wait_rect.centery - 15))
+    pygame.display.flip()
+
+    try:
+        with open("project_data.json", "r") as f:
+            data = json.load(f)
+
+        audio_engine.stop()
+
+        global master_bpm, master_key, master_scale
+        master_bpm = data["master"]["bpm"]
+        master_key = data["master"]["key"]
+        master_scale = data["master"]["scale"]
+        
+        for i in range(12):
+            clear_slot(i)
+        
+        audio_engine.max_length = 0
+
+        for slot_data in data["slots"]:
+            idx = slot_data["index"]
+            song_name = slot_data["song_name"]
+            stem_type = slot_data["type"]
+            
+            song_path = os.path.join("Songs", song_name)
+            
+            if os.path.exists(song_path):
+                add_stem_to_slot(idx, song_path, stem_type)
+                
+                s = slots[idx]
+                s.volume = slot_data["volume"]
+                s.target_volume = slot_data["volume"]
+                s.half = slot_data["half"]
+                
+                if s.half == 1 and not s.empty:
+                      s.offset = audio_engine.max_length // 2
+            else:
+                print(f"'{song_name}' not found during load.")
+
+        audio_engine.start()
+        print("project loaded successfully")
+
+    except Exception as e:
+        print(f"error loading project: {e}")
 
 # stem select
 dd_song = Dropdown(240, 200, 360, 35, get_song_list(), max_display_items=16)
@@ -668,75 +815,6 @@ mt_key = Dropdown(220, 235, 180, 35, list(KEY_TO_INT.keys()), max_display_items=
 mt_scale = Dropdown(440, 235, 180, 35, ["major", "minor"], max_display_items=2)
 mt_bpm = InputBox(370, 200, 100, 35)
 
-def darken_color(color, factor=0.6): # one less hard-coded thing
-    r, g, b = color
-    return (int(r * factor), int(g * factor), int(b * factor))
-
-def lighten_color(color, factor=1.5):
-    r, g, b = color
-    return (min(255, int(r * factor)), min(255, int(g * factor)), min(255, int(b * factor)))
-
-def lerp_color(c1, c2, t):
-    return (
-        int(c1[0] + (c2[0] - c1[0]) * t),
-        int(c1[1] + (c2[1] - c1[1]) * t),
-        int(c1[2] + (c2[2] - c1[2]) * t)
-    )
-
-def draw_slider(x, y, w, h, value):
-    track_outline_col = darken_color(SLIDER_COLOR, factor=0.4)
-    knob_outline_col = darken_color(SLIDER_TIP, factor=0.4)
-    pygame.draw.rect(screen, SLIDER_COLOR, (x, y, w, h))
-    filled = int(w * value)
-    if filled > 0:
-        pygame.draw.rect(screen, SLIDER_FILL, (x, y, filled, h))
-    pygame.draw.rect(screen, track_outline_col, (x, y, w, h), 2)
-    knob_x = x + filled
-    knob_y = y + h // 2
-    knob_radius = h // 2 + 2
-    pygame.draw.circle(screen, SLIDER_TIP, (knob_x, knob_y), knob_radius)
-    pygame.draw.circle(screen, knob_outline_col, (knob_x, knob_y), knob_radius, 2)
-    
-def draw_offset_button(x, y, state):
-    mx, my = pygame.mouse.get_pos()
-
-    if state == False:
-        screen.blit(btn_offset_off, (x,y))
-    else:
-        screen.blit(btn_offset_on, (x,y))
-        
-    #hover highlight
-    if x <= mx < x+32 and y <= my < y+32 and not input_blocked:
-        screen.blit(btn_offset_hover, (x,y))
-
-def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color):
-    # draws text with outline and scales if too big
-    if not text:
-        return
-
-    text_surf = font.render(text, True, color)
-    outline_surf = font.render(text, True, (0, 0, 0))
-
-    width, height = text_surf.get_size()
-    if width > max_width:
-        scale_factor = max_width / width
-        new_width = int(width * scale_factor)
-        new_height = int(height * scale_factor)
-        text_surf = pygame.transform.smoothscale(text_surf, (new_width, new_height))
-        outline_surf = pygame.transform.smoothscale(outline_surf, (new_width, new_height))
-
-    rect = text_surf.get_rect(center=(center_x, center_y))
-
-    # draw outline
-    offsets = [
-        (-1, -1), (0, -1), (1, -1),
-        (-1,  0),          (1,  0),
-        (-1,  1), (0,  1), (1,  1)
-    ]
-    for dx, dy in offsets:
-        surface.blit(outline_surf, (rect.x + dx, rect.y + dy))
-    surface.blit(text_surf, rect)
-
 # -------------------- main loop -------------------- 
 
 clock = pygame.time.Clock()
@@ -745,7 +823,14 @@ pulse_timer = 0
 
 while running:
     # bg
-    screen.fill((15, 15, 15))
+    screen.fill(PALETTE["bg_dark"])
+    
+    # grid
+    grid_size = 40
+    for x in range(0, SCREEN_W, grid_size):
+        pygame.draw.line(screen, PALETTE["bg_light"], (x, 0), (x, SCREEN_H))
+    for y in range(0, SCREEN_H, grid_size):
+        pygame.draw.line(screen, PALETTE["bg_light"], (0, y), (SCREEN_W, y))
 
     mx, my = pygame.mouse.get_pos() # where tf are we
 
