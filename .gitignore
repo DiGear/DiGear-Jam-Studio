@@ -183,3 +183,4 @@ cython_debug/
 MUSIC CREDITS.txt
 workspace.code-workspace
 project_data.json
+config.json
