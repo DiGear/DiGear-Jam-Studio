@@ -74,6 +74,20 @@ SMALLERFONT = None
 FONT = None
 BIGFONT = None
 
+current_theme_name = "default"
+
+def save_config():
+    config = {
+        "theme": current_theme_name,
+        "font": TYPER[0], 
+        "use_flats": USE_FLATS
+    }
+    try:
+        with open("config.json", "w") as f:
+            json.dump(config, f, indent=4)
+    except Exception as e:
+        print(f"fuck: {e}")
+
 def update_fonts(font_name=None):
     global SMALLERFONT, FONT, BIGFONT, TYPER
     if font_name:
@@ -108,6 +122,7 @@ def update_graphics_constants():
     SLIDER_TIP = PALETTE["slider_knob"]
 
 def load_theme(theme_name):
+    global current_theme_name
     path = os.path.join("themes", theme_name + ".json")
     if os.path.exists(path):
         try:
@@ -117,15 +132,33 @@ def load_theme(theme_name):
                     if k in PALETTE:
                         PALETTE[k] = tuple(v)
             update_graphics_constants()
-            print(f"Loaded theme: {theme_name}")
+            current_theme_name = theme_name
+            print(f"loaded theme: {theme_name}")
         except Exception as e:
-            print(f"Failed to load theme: {e}")
+            print(f"failed to load theme: {e}")
     else:
-        print(f"Theme not found: {path}")
+        print(f"theme not found: {path}")
     update_graphics_constants()
 
-update_fonts()
-load_theme("default")
+
+init_theme = "default"
+init_font = "Arial"
+init_flats = False
+
+if os.path.exists("config.json"):
+    try:
+        with open("config.json", "r") as f:
+            config_data = json.load(f)
+            init_theme = config_data.get("theme", "default")
+            init_font = config_data.get("font", "Arial")
+            init_flats = config_data.get("use_flats", False)
+            print("Config loaded.")
+    except Exception as e:
+        print(f"Error reading config: {e}")
+
+USE_FLATS = init_flats
+update_fonts(init_font)
+load_theme(init_theme)
 
 SLIDER_W = 120
 SLIDER_H = 10
@@ -592,9 +625,16 @@ available_fonts.sort()
 if "arial" not in available_fonts and len(available_fonts) > 0:
     available_fonts.insert(0, "arial")
 
+def get_idx(lst, item):
+    try:
+        return lst.index(item)
+    except ValueError:
+        return 0
+
 # option s
-opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=0)
-opt_font_dd = Dropdown(350, 270, 200, 35, available_fonts, default_index=available_fonts.index("arial") if "arial" in available_fonts else 0, max_display_items=8)
+opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=get_idx(available_themes, current_theme_name))
+opt_font_dd = Dropdown(350, 270, 200, 35, available_fonts, default_index=get_idx(available_fonts, TYPER[0]), max_display_items=8)
+
 opt_notation_btn = pygame.Rect(350, 340, 200, 35)
 
 def reset_master():
@@ -1187,7 +1227,9 @@ while running:
         if options_open:
             if opt_theme_dd.handle_event(event):
                 sel = opt_theme_dd.get_selected()
-                if sel: load_theme(sel)
+                if sel: 
+                    load_theme(sel)
+                    save_config()
                 continue
                 
             if opt_font_dd.handle_event(event):
@@ -1198,11 +1240,13 @@ while running:
                     mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, PALETTE["text_main"])
                     opt_theme_dd.font = SMALLERFONT
                     opt_font_dd.font = SMALLERFONT
+                    save_config()
                 continue
             
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if opt_notation_btn.collidepoint(mx, my):
                     USE_FLATS = not USE_FLATS
+                    save_config()
                 
                 opt_close_rect = pygame.Rect(335, 480, 170, 50)
                 if opt_close_rect.collidepoint(mx, my):
