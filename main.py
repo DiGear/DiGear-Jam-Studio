@@ -578,22 +578,33 @@ class Dropdown:
                 pygame.draw.rect(screen, (100, 100, 100), sb_thumb_rect, border_radius=4)
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEWHEEL and self.is_open:
+        if event.type == pygame.MOUSEWHEEL:
             mx, my = pygame.mouse.get_pos()
             
-            display_height = min(len(self.options), self.max_display_items) * self.item_height
-            list_rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height, self.rect.width, display_height)
-            
-            if list_rect.collidepoint(mx, my):
-                total_height = len(self.options) * self.item_height
-                max_scroll = max(0, total_height - display_height)
+            if self.is_open and self.options:
+                display_height = min(len(self.options), self.max_display_items) * self.item_height
+                list_rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height, self.rect.width, display_height)
                 
-                scroll_speed = 20
-                self.scroll_y -= event.y * scroll_speed
-                
-                if self.scroll_y < 0: self.scroll_y = 0
-                if self.scroll_y > max_scroll: self.scroll_y = max_scroll
-                return True
+                if list_rect.collidepoint(mx, my):
+                    total_height = len(self.options) * self.item_height
+                    max_scroll = max(0, total_height - display_height)
+                    
+                    scroll_speed = 20
+                    self.scroll_y -= event.y * scroll_speed
+                    
+                    if self.scroll_y < 0: self.scroll_y = 0
+                    if self.scroll_y > max_scroll: self.scroll_y = max_scroll
+                    return True
+
+            elif not self.is_open and self.rect.collidepoint(mx, my):
+                if self.options:
+                    if event.y > 0:
+                        self.index -=1
+                    elif event.y < 0:
+                        self.index += 1
+                    
+                    self.index = max(0, min(self.index, len(self.options) -1))
+                    return True
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
