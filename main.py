@@ -153,6 +153,12 @@ class AudioEngine:
         if self.position >= self.max_length:
             self.position %= self.max_length
 
+    def restart(self):
+        self.position = 0
+
+        if self.stream is None or not self.stream.active:
+            self.start()
+
     def start(self):
         self.update_max_length()
         self.stream = sd.OutputStream(
@@ -813,26 +819,48 @@ while running:
         max_val = math.tanh(steepness)
         pulse_val = (curved_sin / max_val + 1) / 2
 
-    # pause play button
-    btn_play_w = 60
-    btn_play_h = 40
-    btn_play_x = (SCREEN_W // 2) - (btn_play_w // 2)
-    btn_play_y = 20
-    
-    btn_play_rect = pygame.Rect(btn_play_x, btn_play_y, btn_play_w, btn_play_h)
-    btn_play_col = (80, 80, 80)
+    # pause play restart button
+    ctrl_btn_w = 60
+    ctrl_btn_h = 40
+    ctrl_gap = 12
+    ctrl_y = 20
+    total_ctrl_w = (ctrl_btn_w * 2) + ctrl_gap
+    ctrl_start_x = (SCREEN_W // 2) - (total_ctrl_w // 2)
 
+    
+    btn_restart_rect = pygame.Rect(ctrl_start_x, ctrl_y, ctrl_btn_w, ctrl_btn_h)
+    btn_play_rect = pygame.Rect(ctrl_start_x + ctrl_btn_w + ctrl_gap, ctrl_y, ctrl_btn_w, ctrl_btn_h)
+
+    btn_ctrl_col = (80, 80, 80)
+    icon_col = (198, 198, 198)
+
+    # restart button
+    if btn_restart_rect.collidepoint(mx, my) and not input_blocked:
+        restart_outline = (141, 141, 141)
+    else:
+        restart_outline = darken_color(btn_ctrl_col)
+
+    pygame.draw.rect(screen, btn_ctrl_col, btn_restart_rect, border_radius=2)
+    pygame.draw.rect(screen, restart_outline, btn_restart_rect, 4, border_radius=2)
+
+    pygame.draw.rect(screen, icon_col, (btn_restart_rect.centerx - 10, btn_restart_rect.centery - 8, 4, 16))
+    pts_restart = [
+        (btn_restart_rect.centerx - 5, btn_restart_rect.centery),
+        (btn_restart_rect.centerx + 9, btn_restart_rect.centery - 8),
+        (btn_restart_rect.centerx + 9, btn_restart_rect.centery + 8)
+    ]
+    pygame.draw.polygon(screen, icon_col, pts_restart)
+
+    #pause button
     if btn_play_rect.collidepoint(mx, my) and not input_blocked:
         play_outline = (141, 141, 141)
     else:
-        play_outline = darken_color(btn_play_col)
+        play_outline = darken_color(btn_ctrl_col)
 
-    pygame.draw.rect(screen, btn_play_col, btn_play_rect, border_radius=2)
+    pygame.draw.rect(screen, btn_ctrl_col, btn_play_rect, border_radius=2)
     pygame.draw.rect(screen, play_outline, btn_play_rect, 4, border_radius=2)
 
-    is_playing = audio_engine.stream is not None and audio_engine.stream.active
-
-    icon_col = (198, 198, 198)
+    is_playing = audio_engine is not None and audio_engine.stream.active
 
     if is_playing:
         bar_w = 6
@@ -845,7 +873,8 @@ while running:
     else:
         tri_w = 14
         tri_h = 16
-        
+        gap = 4
+
         pts = [
             (btn_play_rect.centerx - 4, btn_play_rect.centery - tri_h//2),
             (btn_play_rect.centerx - 4, btn_play_rect.centery + tri_h//2),
@@ -1114,10 +1143,10 @@ while running:
         # main screen inputs
         if event.type == pygame.MOUSEBUTTONDOWN:
 
-            #pause
-            btn_play_w = 60
-            btn_play_rect = pygame.Rect((SCREEN_W // 2) - (btn_play_w // 2), 20, 60, 40)
-            
+            #pause play restart
+            if btn_restart_rect.collidepoint(mx, my) and event.button == 1:
+                audio_engine.restart()
+
             if btn_play_rect.collidepoint(mx, my) and event.button == 1:
                 toggle_playback()
             
