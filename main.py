@@ -732,6 +732,8 @@ while running:
     # bg
     screen.fill((15, 15, 15))
 
+    mx, my = pygame.mouse.get_pos() # where tf are we
+
     # slider sm64
     lerp_speed = 0.33
     
@@ -747,23 +749,38 @@ while running:
     mt_btn_rect = pygame.Rect(20, 20, 200, 40)
     mt_btn_color = (0, 170, 60)
 
+    if mt_btn_rect.collidepoint(mx, my):
+        mt_outline_col = (89, 199, 128)
+    else:
+        mt_outline_col = darken_color(mt_btn_color)
+
     pygame.draw.rect(screen, mt_btn_color, mt_btn_rect, border_radius=4)
-    pygame.draw.rect(screen, darken_color(mt_btn_color), mt_btn_rect, 4, border_radius=4)
+    pygame.draw.rect(screen, mt_outline_col, mt_btn_rect, 4, border_radius=4)
     
     screen.blit(FONT.render("Set Manual Tuning", True, (255, 255, 255)), (30, 28))
 
     # save and load buttons
-    btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40, border_radius=4)
-    btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40, border_radius=4)
+    btn_save_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40) # (removed border_radius from here why the fuck was it here)
+    btn_load_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
 
     save_col = (230, 120, 40)
     load_col = (60, 120, 210)
 
+    if btn_save_rect.collidepoint(mx, my):
+        save_outline = (238, 167, 115)
+    else:
+        save_outline = darken_color(save_col)
+
+    if btn_load_rect.collidepoint(mx, my):
+        load_outline = (128, 167, 225)
+    else:
+        load_outline = darken_color(load_col)
+
     pygame.draw.rect(screen, save_col, btn_save_rect, border_radius=4)
-    pygame.draw.rect(screen, darken_color(save_col), btn_save_rect, 4, border_radius=4)
+    pygame.draw.rect(screen, save_outline, btn_save_rect, 4, border_radius=4)
 
     pygame.draw.rect(screen, load_col, btn_load_rect, border_radius=4)
-    pygame.draw.rect(screen, darken_color(load_col), btn_load_rect, 4, border_radius=4)
+    pygame.draw.rect(screen, load_outline, btn_load_rect, 4, border_radius=4)
 
     screen.blit(FONT.render("Save", True, (255,255,255)), (btn_save_rect.x + 20, btn_save_rect.y + 8))
     screen.blit(FONT.render("Load", True, (255,255,255)), (btn_load_rect.x + 20, btn_load_rect.y + 8))
@@ -792,14 +809,19 @@ while running:
     btn_play_y = 20
     
     btn_play_rect = pygame.Rect(btn_play_x, btn_play_y, btn_play_w, btn_play_h)
-    btn_play_col = (80, 80, 90)
+    btn_play_col = (80, 80, 80)
+
+    if btn_play_rect.collidepoint(mx, my):
+        play_outline = (141, 141, 141)
+    else:
+        play_outline = darken_color(btn_play_col)
 
     pygame.draw.rect(screen, btn_play_col, btn_play_rect, border_radius=2)
-    pygame.draw.rect(screen, darken_color(btn_play_col), btn_play_rect, 4, border_radius=2)
+    pygame.draw.rect(screen, play_outline, btn_play_rect, 4, border_radius=2)
 
     is_playing = audio_engine.stream is not None and audio_engine.stream.active
 
-    icon_col = (255, 255, 255)
+    icon_col = (198, 198, 198)
 
     if is_playing:
         bar_w = 6
@@ -826,6 +848,9 @@ while running:
         cx = 120 + (i % 4) * 200
         cy = 150 + (i // 4) * 250
         
+        dist = (mx - cx)**2 + (my - cy)**2
+        is_hovered = dist <= CIRCLE_RADIUS**2
+
         if slot.empty:
             color = CIRCLE_COLOR_EMPTY
             outline_color = darken_color(color)
@@ -838,6 +863,9 @@ while running:
                 outline_color = lerp_color(base_outline, bright_outline, pulse_val)
             else:
                 outline_color = darken_color(color)
+
+        if is_hovered:
+            outline_color = (128, 128, 128)
             
         pygame.draw.circle(screen, color, (cx, cy), CIRCLE_RADIUS)
         pygame.draw.circle(screen, outline_color, (cx, cy), CIRCLE_RADIUS, 5)
@@ -857,7 +885,6 @@ while running:
         elif not slot.empty and slot.type == "drums":
             mode_label = "Neutral"
 
-        # draw tuah
         draw_dynamic_text(screen, name, FONT, cx, cy - 22, max_text_width, TEXT_COLOR)
         draw_dynamic_text(screen, stype, FONT, cx, cy, max_text_width, (230, 230, 230))
         if mode_label:
