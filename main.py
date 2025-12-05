@@ -653,8 +653,8 @@ def get_idx(lst, item):
         return 0
 
 # option s
-opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=get_idx(available_themes, current_theme_name))
-opt_font_dd = Dropdown(350, 270, 200, 35, available_fonts, default_index=get_idx(available_fonts, TYPER[0]), max_display_items=8)
+opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=get_idx(available_themes, current_theme_name), max_display_items=15)
+opt_font_dd = Dropdown(350, 270, 200, 35, available_fonts, default_index=get_idx(available_fonts, TYPER[0]), max_display_items=14)
 
 opt_notation_btn = pygame.Rect(350, 340, 200, 35)
 
@@ -1320,6 +1320,37 @@ while running:
 
                     save_config()
                 continue
+
+        if event.type == pygame.MOUSEWHEEL:
+            if options_open:
+                if opt_theme_dd.handle_event(event) or opt_font_dd.handle_event(event):
+                    continue
+            
+            if panel_open:
+                if dd_song.handle_event(event) or dd_stem.handle_event(event):
+                    continue
+            
+            if manual_override_open:
+                if mt_key.handle_event(event) or mt_scale.handle_event(event):
+                    continue
+
+            if not input_blocked:
+                mx, my = pygame.mouse.get_pos()
+                
+                for i in range(12):
+                    cx = 120 + (i % 4) * 200
+                    cy = 150 + (i // 4) * 250
+                    sx = cx - SLIDER_W // 2
+                    sy = cy + CIRCLE_RADIUS + 15
+                    
+                    slider_rect = pygame.Rect(sx - 10, sy - 10, SLIDER_W + 20, SLIDER_H + 20)
+                    
+                    if slider_rect.collidepoint(mx, my):
+                        scroll_amount = event.y * 0.05
+                        
+                        new_vol = slots[i].target_volume + scroll_amount
+                        slots[i].target_volume = max(0.0, min(1.0, new_vol))
+                        break
             
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if opt_notation_btn.collidepoint(mx, my):
