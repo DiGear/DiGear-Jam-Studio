@@ -199,10 +199,8 @@ def get_display_key(key_str):
 def key_shift_semitones(target_key, source_key):
     # calc semitone diff
     raw = KEY_TO_INT[target_key] - KEY_TO_INT[source_key]
-    if raw > 6:
-        raw -= 12
-    elif raw < -6:
-        raw += 12
+    if raw > 6: raw -= 12
+    elif raw < -6: raw += 12
     return raw
 
 def bpm_with_multipliers(original_bpm, master_bpm):
@@ -242,8 +240,7 @@ def load_stem_direct(path):
     if sr != sample_rate:
         print(f"Warning: samplerate mismatch in {path}")
     peak = np.max(np.abs(audio))
-    if peak > 0:
-        audio = audio / peak
+    if peak: audio /= peak
     return audio
 
 def draw_slider(x, y, w, h, value):
@@ -274,8 +271,7 @@ def draw_offset_button(x, y, state):
 
 def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color):
     # draws text with outline and scales if too big
-    if not text:
-        return
+    if not text: return
 
     text_surf = font.render(text, True, color)
     outline_surf = font.render(text, True, PALETTE["text_dark"])
@@ -304,17 +300,12 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 
 class Slot:
     def __init__(self):
-        self.empty = True
-        self.stem = None
-        self.song_name = None
-        self.type = None
-        self.key = None
-        self.scale = None
-        self.bpm = None
+        self.stem = self.song_name = self.type = self.key = self.scale = self.bpm = None
         self.volume = 1.0
         self.target_volume = 1.0
         self.offset = 0
         self.half = 0
+        self.empty = True
 
 class AudioEngine:
     def __init__(self, slots, samplerate=44100):
@@ -329,8 +320,7 @@ class AudioEngine:
         self.max_length = max(lengths) if lengths else 0
 
     def audio_callback(self, outdata, frames, time, status):
-        if status:
-            print("audio callback status:", status)
+        if status: print("audio callback status:", status)
 
         self.max_length = max((len(s.stem) for s in self.slots if not s.empty and s.stem is not None), default=0)
         mix = np.zeros((frames, CHANNELS), dtype=np.float32)
@@ -338,61 +328,36 @@ class AudioEngine:
         if self.max_length == 0:
             outdata[:] = mix
             return
-
-        # loop it
-        if self.position >= self.max_length:
-            self.position %= self.max_length
-
-        pos = self.position
+            
+        self.position %= self.max_length
+        
+        frame_indices = np.arange(frames)
 
         for slot in self.slots:
-            
-            if slot.empty or slot.stem is None:
-                continue
+            if slot.empty or slot.stem is None: continue
 
-            audio = slot.stem
+            audio = slot.stem.astype(np.float32)
             length = len(audio)
 
-            if length == 0:
-                continue
+            if length == 0: continue
 
-            current_offset = (length // 2) if slot.half == 1 else 0
-            offset_pos = (pos + current_offset) % length
+            offset_pos = (self.position + length // 2 if slot.half == 1 else self.position) % length
 
-            end = offset_pos + frames
-            if end <= length:
-                chunk = audio[offset_pos:end]
-            else:
-                wrap = end - length
-                part1 = audio[offset_pos:length]
-                part2 = audio[0:wrap]
-                chunk = np.vstack((part1, part2))
-
+            # grab audio at frame offsets accounting for wrap
+            chunk = np.take(audio, (frame_indices + offset_pos) % length, axis=0)
+            
             # mono to stereo
-            if chunk.ndim == 1:
-                chunk = np.stack([chunk, chunk], axis=1)
-
-            # fix buffer size if needed
-            if chunk.shape[0] != frames:
-                if chunk.shape[0] > frames:
-                    chunk = chunk[:frames]
-                else:
-                    pad = frames - chunk.shape[0]
-                    chunk = np.vstack((chunk, np.zeros((pad, CHANNELS), dtype=np.float32)))
+            if chunk.ndim < 2: chunk = np.hstack([chunk, chunk])
 
             mix += chunk * slot.volume
-
-        mix = np.clip(mix, -1.0, 1.0)
-        outdata[:] = mix
+        
+        outdata[:] = np.clip(mix, -1.0, 1.0)
         self.position += frames
-        if self.position >= self.max_length:
-            self.position %= self.max_length
+        self.position %= self.max_length
 
     def restart(self):
         self.position = 0
-
-        if self.stream is None or not self.stream.active:
-            self.start()
+        if self.stream is None or not self.stream.active: self.start()
 
     def start(self):
         self.update_max_length()
@@ -647,10 +612,8 @@ if "arial" not in available_fonts and len(available_fonts) > 0:
     available_fonts.insert(0, "arial")
 
 def get_idx(lst, item):
-    try:
-        return lst.index(item)
-    except ValueError:
-        return 0
+    try: return lst.index(item)
+    except ValueError: return 0
 
 # option s
 opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=get_idx(available_themes, current_theme_name), max_display_items=15)
@@ -696,8 +659,7 @@ def add_stem_to_slot(slot_id, song_folder, stem_type):
         master_scale = meta.get("scale", "major")
         print(f"Master set to {master_key} {master_scale}")
     
-    file_to_load = ""
-    loaded_scale = ""
+    file_to_load = loaded_scale = ""
     
     if stem_type == "drums":
         file_to_load = "drums.ogg"
@@ -799,10 +761,7 @@ def shift_slot(i):
     slot.half = 1 if slot.half == 0 else 0
 
 def toggle_playback():
-    if audio_engine.stream and audio_engine.stream.active:
-        audio_engine.stop()
-    else:
-        audio_engine.start()
+    (audio_engine.stop if audio_engine.stream and audio_engine.stream.active else audio_engine.start)()
 
 # -------------------- DETERMINATION -------------------- 
 
@@ -1280,9 +1239,9 @@ while running:
 
         opt_close_rect = pygame.Rect(335, 480, 170, 50)
         if opt_close_rect.collidepoint(mx, my):
-             pygame.draw.rect(screen, PALETTE["btn_confirm_hl"], opt_close_rect)
+            pygame.draw.rect(screen, PALETTE["btn_confirm_hl"], opt_close_rect)
         else:
-             pygame.draw.rect(screen, PALETTE["btn_confirm"], opt_close_rect)
+            pygame.draw.rect(screen, PALETTE["btn_confirm"], opt_close_rect)
         
         draw_text_centered("CLOSE", BIGFONT, TEXT_COLOR, opt_close_rect)
 
@@ -1601,24 +1560,22 @@ while running:
             slots[i].target_volume = max(0.0, min(1.0, rel / SLIDER_W))
 
         if event.type == pygame.MOUSEWHEEL:
-            if options_open:
-                if opt_theme_dd.handle_event(event) or opt_font_dd.handle_event(event):
-                    continue
+            if options_open and (opt_theme_dd.handle_event(event) or opt_font_dd.handle_event(event)): 
+                continue
             
-            if panel_open:
-                if dd_song.handle_event(event) or dd_stem.handle_event(event):
-                    continue
+            if panel_open and (dd_song.handle_event(event) or dd_stem.handle_event(event)):
+                continue
             
-            if manual_override_open:
-                if mt_key.handle_event(event) or mt_scale.handle_event(event):
-                    continue
+            if manual_override_open and (mt_key.handle_event(event) or mt_scale.handle_event(event)):
+                continue
 
             if not input_blocked:
                 mx, my = pygame.mouse.get_pos()
                 
                 for i in range(12):
-                    cx = 120 + (i % 4) * 200
-                    cy = 150 + (i // 4) * 250
+                    q, r = divmod(i, 4)
+                    cx = 120 + r * 200
+                    cy = 150 + q * 250
                     sx = cx - SLIDER_W // 2
                     sy = cy + CIRCLE_RADIUS + 15
                     
