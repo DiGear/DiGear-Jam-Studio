@@ -1,0 +1,48 @@
+{
+  "bg_dark": [15, 56, 15],
+  "bg_light": [25, 70, 25],
+  "panel_bg": [20, 60, 20],
+  "overlay": [0, 0, 0, 150],
+
+  "popup_bg": [30, 78, 30],
+  "popup_border": [139, 172, 15],
+
+  "hover_outline": [84, 127, 26],
+
+  "text_main": [202, 220, 159],
+  "text_dim": [139, 172, 15],
+  "text_dark": [0, 0, 0],
+  "text_mode_label": [139, 172, 15],
+
+  "slot_default": [139, 172, 15],
+  "slot_empty": [40, 80, 40],
+  "slot_vocals": [160, 200, 90],
+  "slot_bass": [110, 170, 70],
+  "slot_drums": [100, 150, 60],
+  "slot_lead": [180, 210, 110],
+
+  "accent": [139, 172, 15],
+
+  "input_bg": [25, 70, 25],
+  "input_border": [84, 127, 26],
+  "input_active": [139, 172, 15],
+
+  "scrollbar": [84, 127, 26],
+
+  "slider_track": [40, 80, 40],
+  "slider_fill": [139, 172, 15],
+  "slider_knob": [202, 220, 159],
+
+  "btn_manual": [84, 127, 26],
+  "btn_save": [139, 172, 15],
+  "btn_load": [100, 150, 60],
+
+  "btn_ctrl": [35, 85, 35],
+  "btn_icon": [202, 220, 159],
+
+  "btn_confirm": [84, 127, 26],
+  "btn_confirm_hl": [139, 172, 15],
+
+  "btn_cancel": [120, 40, 40],
+  "btn_cancel_hl": [150, 70, 70]
+}

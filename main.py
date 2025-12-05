@@ -501,13 +501,19 @@ class Dropdown:
         if self.is_open and self.options:
             mx, my = pygame.mouse.get_pos()
             
+            current_bg = PALETTE["input_bg"]
+            current_border = PALETTE["scrollbar"]
+            current_text = PALETTE["text_main"]
+            current_hover = PALETTE["accent"]
+            current_active = PALETTE["input_border"]
+
             num_items = len(self.options)
             total_height = num_items * self.item_height
             display_count = min(num_items, self.max_display_items)
             display_height = display_count * self.item_height
             
             list_rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height, self.rect.width, display_height)
-            pygame.draw.rect(screen, self.bg_color, list_rect)
+            pygame.draw.rect(screen, current_bg, list_rect)
             
             old_clip = screen.get_clip()
             screen.set_clip(list_rect)
@@ -516,35 +522,35 @@ class Dropdown:
             
             for i, opt in enumerate(self.options):
                 opt_y = start_y + (i * self.item_height)
-    
+ 
                 if opt_y + self.item_height < list_rect.y or opt_y > list_rect.bottom:
                     continue
                     
                 opt_rect = pygame.Rect(self.rect.x, opt_y, self.rect.width - self.scrollbar_width, self.item_height)
                 
                 is_hovered = opt_rect.collidepoint(mx, my) and list_rect.collidepoint(mx, my)
-                color = self.hover_color if is_hovered else self.active_option_color
+                
+                color = current_hover if is_hovered else current_active
                 
                 pygame.draw.rect(screen, color, opt_rect)
-                pygame.draw.rect(screen, self.border_color, opt_rect, 1)
+                pygame.draw.rect(screen, current_border, opt_rect, 1)
                 
                 display_text = str(opt)
                 if os.path.sep in display_text:
                     display_text = os.path.basename(display_text)
                     
-                surf = self.font.render(display_text, True, self.text_color)
+                surf = self.font.render(display_text, True, current_text)
                 
                 text_y = opt_rect.y + (self.item_height - surf.get_height()) // 2
                 screen.blit(surf, (opt_rect.x + 10, text_y))
             
             screen.set_clip(old_clip)
             
-            pygame.draw.rect(screen, self.border_color, list_rect, 2)
+            pygame.draw.rect(screen, current_border, list_rect, 2)
             
-            # scrollbar
             if total_height > display_height:
                 sb_bg_rect = pygame.Rect(self.rect.right - self.scrollbar_width, list_rect.y, self.scrollbar_width, display_height)
-                pygame.draw.rect(screen, PALETTE["input_bg"], sb_bg_rect)
+                pygame.draw.rect(screen, current_bg, sb_bg_rect)
                 
                 ratio = display_height / total_height
                 thumb_h = max(20, display_height * ratio)
