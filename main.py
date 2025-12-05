@@ -1135,8 +1135,9 @@ while running:
 
             if master_bpm:
                 base_outline = darken_color(color)
-                bright_outline = lighten_color(color, factor=1.4)
-                outline_color = lerp_color(base_outline, bright_outline, pulse_val)
+                bright_outline = lighten_color(color, factor=1.6)
+                dynamic_pulse = pulse_val * slot.volume
+                outline_color = lerp_color(base_outline, bright_outline, dynamic_pulse)
             else:
                 outline_color = darken_color(color)
 
