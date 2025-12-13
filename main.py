@@ -36,9 +36,14 @@ BUFFER_SIZE = 2048
 CHANNELS = 2
 SONG_FOLDERS = ["Songs", "Stock Songs"]
 
+if not os.path.exists("projects"):
+    os.makedirs("projects")
+
 # ----------- squif game -----------
 
 pygame.init()
+
+pygame.key.set_repeat(400, 30)
 
 SCREEN_W, SCREEN_H = 840, 825
 screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
@@ -92,7 +97,8 @@ def save_config():
     config = {
         "theme": current_theme_name,
         "font": TYPER[0], 
-        "use_flats": USE_FLATS
+        "use_flats": USE_FLATS,
+        "master_volume": audio_engine.master_volume
     }
     try:
         with open("config.json", "w") as f:
@@ -164,6 +170,8 @@ if os.path.exists("config.json"):
             init_theme = config_data.get("theme", "default")
             init_font = config_data.get("font", "Arial")
             init_flats = config_data.get("use_flats", False)
+            init_vol = config_data.get("master_volume", 1.0)
+            audio_engine.master_volume = init_vol
             print("Config loaded.")
     except Exception as e:
         print(f"Error reading config: {e}")
@@ -960,16 +968,19 @@ def save_project(filename="project_data.json"):
                 "detected_scale": slot.scale
             }
             data["slots"].append(slot_data)
+
+    full_path = os.path.join("projects", filename)
     
     try:
-        with open(filename, "w") as f:
+        with open(full_path, "w") as f:
             json.dump(data, f, indent=4)
-        print(f"project saved to {filename}")
+        print(f"project saved to {full_path}")
     except Exception as e:
         print(f"Error saving: {e}")
 
 def load_project(filename):
-    if not os.path.exists(filename):
+    full_path = os.path.join("projects", filename)
+    if not os.path.exists(full_path):
         print("no SAVE found")
         return
 
@@ -985,7 +996,7 @@ def load_project(filename):
     pygame.display.flip()
 
     try:
-        with open(filename, "r") as f:
+        with open(full_path, "r") as f:
             data = json.load(f)
 
         audio_engine.stop()
@@ -1043,6 +1054,8 @@ mt_scale = Dropdown(440, 235, 180, 35, ["major", "minor"], max_display_items=2)
 mt_bpm = InputBox(370, 200, 100, 35)
 
 # -------------------- main loop -------------------- 
+
+dragging_master_vol = False # gurhugf
 
 clock = pygame.time.Clock()
 running = True
@@ -1455,6 +1468,7 @@ while running:
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            save_config() # mamster volume
             running = False
 
         mx, my = pygame.mouse.get_pos()
@@ -1469,8 +1483,14 @@ while running:
                      pygame.key.stop_text_input()
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-200)//2, 400, 200)
-                if not box_rect.collidepoint(mx, my):
+                box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-250)//2, 400, 250)
+                cancel_save_rect = pygame.Rect(box_rect.centerx - 60, box_rect.bottom - 60, 120, 40)
+                
+                if cancel_save_rect.collidepoint(mx, my):
+                    saving_mode = False
+                    pygame.key.stop_text_input()
+                
+                elif not box_rect.inflate(100, 100).collidepoint(mx, my):
                     saving_mode = False
                     pygame.key.stop_text_input()
             continue
@@ -1523,12 +1543,18 @@ while running:
                     save_config()
                 continue
 
-            if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION:
-                if pygame.mouse.get_pressed()[0]:
-                    vol_rect = pygame.Rect(350, 170, 200, 15)
-                    if vol_rect.collidepoint(mx, my): # i had a thing here that made a REALLY big hitbox whoops
-                         rel_x = mx - 350
-                         audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                    if pygame.mouse.get_pressed()[0]:
+                        vol_rect = pygame.Rect(350, 170, 200, 15)
+                        if vol_rect.collidepoint(mx, my):
+                            dragging_master_vol = True
+                            rel_x = mx - 350
+                            audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
+            
+            if event.type == pygame.MOUSEMOTION:
+                if dragging_master_vol:
+                    rel_x = mx - 350
+                    audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if opt_notation_btn.collidepoint(mx, my):
@@ -1730,7 +1756,7 @@ while running:
             
             if btn_load_rect.collidepoint(mx, my) and event.button == 1:
                 loading_mode = True
-                files = [f for f in os.listdir(".") if f.endswith(".json") and f != "config.json"]
+                files = [f for f in os.listdir("projects") if f.endswith(".json")]
                 loading_dd = Dropdown((SCREEN_W-300)//2, (SCREEN_H-300)//2 + 80, 300, 35, files, max_display_items=5)
                 continue
 
@@ -1787,6 +1813,9 @@ while running:
             
 
         if event.type == pygame.MOUSEBUTTONUP:
+            if dragging_master_vol:
+                dragging_master_vol = False
+                save_config()
             dragging_slider = None
 
         if event.type == pygame.MOUSEMOTION and dragging_slider is not None:
