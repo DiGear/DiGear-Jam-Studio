@@ -300,10 +300,13 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 # -------------------- classes -------------------- 
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 class Slot:
     def __init__(self):
         self.stem = self.song_name = self.type = self.key = self.scale = self.bpm = None
 =======
+=======
+>>>>>>> Stashed changes
 class Slot(threading.Thread):
     def __init__(self, idx):
         super().__init__()
@@ -380,6 +383,61 @@ class Slot(threading.Thread):
 
         self.output_buffer = chunk * self.volume
 
+        # thread synchronization
+        self.start_event = threading.Event()
+        self.done_event = threading.Event()
+        self.output_buffer = None
+
+        self.req_pos = 0
+        self.req_frames = 0
+        self.req_channels = 2
+
+    def run(self):
+        while True:
+            self.start_event.wait()
+            self.start_event.clear()
+
+            self.process_audio()
+
+            self.done_event.set()
+
+    def process_audio(self):
+        # silence mega mayhem
+        self.output_buffer = np.zeros((self.req_frames, self.req_channels), dtype=np.float32)
+
+        if self.empty or self.stem is None:
+            return
+
+        audio = self.stem
+        length = len(audio)
+        if length == 0:
+            return
+
+        current_offset = (length // 2) if self.half == 1 else 0
+        offset_pos = (self.req_pos + current_offset) % length
+
+        end = offset_pos + self.req_frames
+        
+        if end <= length:
+            chunk = audio[offset_pos:end]
+        else:
+            wrap = end - length
+            part1 = audio[offset_pos:length]
+            part2 = audio[0:wrap]
+            chunk = np.vstack((part1, part2))
+
+        if chunk.ndim == 1:
+            chunk = np.stack([chunk, chunk], axis=1)
+
+        if chunk.shape[0] != self.req_frames:
+            if chunk.shape[0] > self.req_frames:
+                chunk = chunk[:self.req_frames]
+            else:
+                pad = self.req_frames - chunk.shape[0]
+                chunk = np.vstack((chunk, np.zeros((pad, self.req_channels), dtype=np.float32)))
+
+        self.output_buffer = chunk * self.volume
+
 class AudioEngine:
     def __init__(self, slots, samplerate=44100):
         self.slots = slots
@@ -393,7 +451,12 @@ class AudioEngine:
         self.max_length = max(lengths) if lengths else 0
 
     def audio_callback(self, outdata, frames, time, status):
+<<<<<<< Updated upstream
         if status: print("audio callback status:", status)
+=======
+        if status:
+            print("audio callback status:", status)
+>>>>>>> Stashed changes
 
         active_lengths = [len(s.stem) for s in self.slots if not s.empty and s.stem is not None]
         self.max_length = max(active_lengths) if active_lengths else 0
@@ -449,6 +512,9 @@ class AudioEngine:
         mix = np.clip(mix, -1.0, 1.0)
         outdata[:] = mix
         
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
         self.position += frames
         self.position %= self.max_length
@@ -456,8 +522,11 @@ class AudioEngine:
     def restart(self):
         self.position = 0
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         if self.stream is None or not self.stream.active: self.start()
 =======
+=======
+>>>>>>> Stashed changes
         if self.stream is None or not self.stream.active:
             self.start()
 >>>>>>> Stashed changes
