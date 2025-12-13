@@ -103,6 +103,7 @@ def save_config():
     try:
         with open("config.json", "w") as f:
             json.dump(config, f, indent=4)
+        print("Config saved.")
     except Exception as e:
         print(f"fuck: {e}")
 
@@ -162,23 +163,6 @@ def load_theme(theme_name):
 init_theme = "default"
 init_font = "Arial"
 init_flats = False
-
-if os.path.exists("config.json"):
-    try:
-        with open("config.json", "r") as f:
-            config_data = json.load(f)
-            init_theme = config_data.get("theme", "default")
-            init_font = config_data.get("font", "Arial")
-            init_flats = config_data.get("use_flats", False)
-            init_vol = config_data.get("master_volume", 1.0)
-            audio_engine.master_volume = init_vol
-            print("Config loaded.")
-    except Exception as e:
-        print(f"Error reading config: {e}")
-
-USE_FLATS = init_flats
-update_fonts(init_font)
-load_theme(init_theme)
 
 SLIDER_W = 120
 SLIDER_H = 10
@@ -719,6 +703,29 @@ for i in range(12):
     s.start()
     slots.append(s)
 
+audio_engine = AudioEngine(slots, sample_rate)
+
+init_theme = "default"
+init_font = "Arial"
+init_flats = False
+
+if os.path.exists("config.json"):
+    try:
+        with open("config.json", "r") as f:
+            config_data = json.load(f)
+            init_theme = config_data.get("theme", "default")
+            init_font = config_data.get("font", "Arial")
+            init_flats = config_data.get("use_flats", False)
+            init_vol = config_data.get("master_volume", 1.0)
+            audio_engine.master_volume = init_vol 
+            print("Config loaded.")
+    except Exception as e:
+        print(f"fuck {e}")
+
+USE_FLATS = init_flats
+update_fonts(init_font)
+load_theme(init_theme)
+
 master_bpm = None
 master_key = None
 master_scale = None
@@ -731,7 +738,6 @@ selected_slot = None
 # relative/parallel mode shit
 use_relative_mode = False
 
-audio_engine = AudioEngine(slots, sample_rate)
 audio_engine.start()
 
 options_open = False
@@ -1425,7 +1431,8 @@ while running:
         overlay.fill((0,0,0,200))
         screen.blit(overlay, (0,0))
         
-        box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-200)//2, 400, 200)
+        box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-250)//2, 400, 250)
+        
         pygame.draw.rect(screen, PALETTE["panel_bg"], box_rect)
         pygame.draw.rect(screen, PALETTE["accent"], box_rect, 2)
         
@@ -1435,8 +1442,16 @@ while running:
         save_input.rect.center = box_rect.center
         save_input.draw(screen)
         
+        cancel_rect = pygame.Rect(box_rect.centerx - 60, box_rect.bottom - 60, 120, 40)
+        
+        if cancel_rect.collidepoint(mx, my):
+             pygame.draw.rect(screen, PALETTE["btn_cancel_hl"], cancel_rect)
+        else:
+             pygame.draw.rect(screen, PALETTE["btn_cancel"], cancel_rect)
+        draw_text_centered("CANCEL", FONT, TEXT_COLOR, cancel_rect)
+
         draw_text_centered("Press Enter to Save", SMALLERFONT, PALETTE["text_dim"], 
-                           pygame.Rect(box_rect.x, box_rect.bottom - 40, 400, 30))
+                           pygame.Rect(box_rect.x, box_rect.bottom - 90, 400, 30))
 
     if loading_mode:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
@@ -1468,10 +1483,21 @@ while running:
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            save_config() # mamster volume
+            save_config()
             running = False
 
         mx, my = pygame.mouse.get_pos()
+
+        if event.type == pygame.MOUSEMOTION:
+            if dragging_master_vol:
+                rel_x = mx - 350
+                audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
+
+        if event.type == pygame.MOUSEBUTTONUP:
+            if dragging_master_vol:
+                dragging_master_vol = False
+                save_config()
+            dragging_slider = None
 
         if saving_mode:
             if save_input.handle_event(event):
@@ -1484,13 +1510,16 @@ while running:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-250)//2, 400, 250)
+                if save_input.rect.collidepoint(mx, my):
+                    continue
+                
                 cancel_save_rect = pygame.Rect(box_rect.centerx - 60, box_rect.bottom - 60, 120, 40)
                 
                 if cancel_save_rect.collidepoint(mx, my):
                     saving_mode = False
                     pygame.key.stop_text_input()
-                
-                elif not box_rect.inflate(100, 100).collidepoint(mx, my):
+
+                elif not box_rect.collidepoint(mx, my):
                     saving_mode = False
                     pygame.key.stop_text_input()
             continue
@@ -1508,6 +1537,7 @@ while running:
                     sel = loading_dd.get_selected()
                     if sel:
                         load_project(sel)
+
                         if master_bpm:
                              mt_bpm.text = str(int(master_bpm))
                              mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, PALETTE["text_main"])
@@ -1544,18 +1574,13 @@ while running:
                 continue
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                    if pygame.mouse.get_pressed()[0]:
-                        vol_rect = pygame.Rect(350, 170, 200, 15)
-                        if vol_rect.collidepoint(mx, my):
-                            dragging_master_vol = True
-                            rel_x = mx - 350
-                            audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
-            
-            if event.type == pygame.MOUSEMOTION:
-                if dragging_master_vol:
-                    rel_x = mx - 350
-                    audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
-
+                if pygame.mouse.get_pressed()[0]:
+                    vol_rect = pygame.Rect(350, 170, 200, 15)
+                    if vol_rect.collidepoint(mx, my):
+                        dragging_master_vol = True
+                        rel_x = mx - 350
+                        audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
+           
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if opt_notation_btn.collidepoint(mx, my):
                     USE_FLATS = not USE_FLATS
