@@ -2,6 +2,8 @@
 
 A real-time Python audio mixing application that automatically synchronizes pitch (Key) and tempo (BPM) across multiple song stems. Built with Pygame, SoundDevice, and Rubberband.
 
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 ## Features
 
   - **12 Audio Slots:** Load stems individually into 12 mixer slots.

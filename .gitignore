@@ -186,3 +186,4 @@ project_data.json
 config.json
 *.wav
 themes/gamer.json
+/projects
