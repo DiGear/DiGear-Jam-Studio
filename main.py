@@ -2,6 +2,7 @@ import os
 import json
 import math
 import datetime
+import threading
 import numpy as np
 import soundfile as sf
 import pyrubberband as rb
@@ -79,7 +80,7 @@ SLIDER_COLOR = None
 SLIDER_FILL = None
 SLIDER_TIP = None
 
-TYPER = ["Arial", 20, 22, 28] 
+TYPER = ["Arial", 20, 22, 28] # even if you dont have arial for whateve rfuckin reason this doesnt crash it just picks some random font idek which one but it works fine so i dont gaf
 SMALLERFONT = None
 FONT = None
 BIGFONT = None
@@ -102,7 +103,7 @@ def update_fonts(font_name=None):
     global SMALLERFONT, FONT, BIGFONT, TYPER
     if font_name:
         TYPER[0] = font_name
-    
+
     try:
         SMALLERFONT = pygame.font.SysFont(TYPER[0], TYPER[1])
         FONT = pygame.font.SysFont(TYPER[0], TYPER[2])
@@ -115,7 +116,7 @@ def update_fonts(font_name=None):
 def update_graphics_constants():
     global CIRCLE_COLOR_EMPTY, CIRCLE_COLOR_DEFAULT, STEM_COLORS, TEXT_COLOR
     global SLIDER_COLOR, SLIDER_FILL, SLIDER_TIP
-    
+
     CIRCLE_COLOR_EMPTY = PALETTE["slot_empty"]
     CIRCLE_COLOR_DEFAULT = PALETTE["slot_default"]
 
@@ -298,14 +299,86 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 
 # -------------------- classes -------------------- 
 
+<<<<<<< Updated upstream
 class Slot:
     def __init__(self):
         self.stem = self.song_name = self.type = self.key = self.scale = self.bpm = None
+=======
+class Slot(threading.Thread):
+    def __init__(self, idx):
+        super().__init__()
+        self.idx = idx
+        self.daemon = True # ensure thread dies when app closes
+        
+        # audio state
+        self.empty = True
+        self.stem = None
+        self.song_name = None
+        self.type = None
+        self.key = None
+        self.scale = None
+        self.bpm = None
+>>>>>>> Stashed changes
         self.volume = 1.0
         self.target_volume = 1.0
         self.offset = 0
         self.half = 0
         self.empty = True
+
+        # thread synchronization
+        self.start_event = threading.Event()
+        self.done_event = threading.Event()
+        self.output_buffer = None
+
+        self.req_pos = 0
+        self.req_frames = 0
+        self.req_channels = 2
+
+    def run(self):
+        while True:
+            self.start_event.wait()
+            self.start_event.clear()
+
+            self.process_audio()
+
+            self.done_event.set()
+
+    def process_audio(self):
+        # silence mega mayhem
+        self.output_buffer = np.zeros((self.req_frames, self.req_channels), dtype=np.float32)
+
+        if self.empty or self.stem is None:
+            return
+
+        audio = self.stem
+        length = len(audio)
+        if length == 0:
+            return
+
+        current_offset = (length // 2) if self.half == 1 else 0
+        offset_pos = (self.req_pos + current_offset) % length
+
+        end = offset_pos + self.req_frames
+        
+        if end <= length:
+            chunk = audio[offset_pos:end]
+        else:
+            wrap = end - length
+            part1 = audio[offset_pos:length]
+            part2 = audio[0:wrap]
+            chunk = np.vstack((part1, part2))
+
+        if chunk.ndim == 1:
+            chunk = np.stack([chunk, chunk], axis=1)
+
+        if chunk.shape[0] != self.req_frames:
+            if chunk.shape[0] > self.req_frames:
+                chunk = chunk[:self.req_frames]
+            else:
+                pad = self.req_frames - chunk.shape[0]
+                chunk = np.vstack((chunk, np.zeros((pad, self.req_channels), dtype=np.float32)))
+
+        self.output_buffer = chunk * self.volume
 
 class AudioEngine:
     def __init__(self, slots, samplerate=44100):
@@ -322,12 +395,13 @@ class AudioEngine:
     def audio_callback(self, outdata, frames, time, status):
         if status: print("audio callback status:", status)
 
-        self.max_length = max((len(s.stem) for s in self.slots if not s.empty and s.stem is not None), default=0)
-        mix = np.zeros((frames, CHANNELS), dtype=np.float32)
-
+        active_lengths = [len(s.stem) for s in self.slots if not s.empty and s.stem is not None]
+        self.max_length = max(active_lengths) if active_lengths else 0
+        
         if self.max_length == 0:
-            outdata[:] = mix
+            outdata.fill(0)
             return
+<<<<<<< Updated upstream
             
         self.position %= self.max_length
         
@@ -352,12 +426,41 @@ class AudioEngine:
             mix += chunk * slot.volume
         
         outdata[:] = np.clip(mix, -1.0, 1.0)
+=======
+
+        if self.position >= self.max_length:
+            self.position %= self.max_length
+
+        for slot in self.slots:
+            slot.req_pos = self.position
+            slot.req_frames = frames
+            slot.req_channels = CHANNELS
+            slot.start_event.set()
+
+        for slot in self.slots:
+            slot.done_event.wait()
+            slot.done_event.clear()
+
+        mix = np.zeros((frames, CHANNELS), dtype=np.float32)
+        
+        for slot in self.slots:
+            mix += slot.output_buffer
+
+        mix = np.clip(mix, -1.0, 1.0)
+        outdata[:] = mix
+        
+>>>>>>> Stashed changes
         self.position += frames
         self.position %= self.max_length
 
     def restart(self):
         self.position = 0
+<<<<<<< Updated upstream
         if self.stream is None or not self.stream.active: self.start()
+=======
+        if self.stream is None or not self.stream.active:
+            self.start()
+>>>>>>> Stashed changes
 
     def start(self):
         self.update_max_length()
@@ -587,8 +690,13 @@ class Dropdown:
 
 # -------------------- global state -------------------- 
 
-# init slots
-slots = [Slot() for _ in range(12)]
+# breaded
+slots = []
+for i in range(12):
+    s = Slot(i)
+    s.start()
+    slots.append(s)
+
 master_bpm = None
 master_key = None
 master_scale = None
@@ -791,7 +899,7 @@ def export_mix_to_wav(filename="export.wav"):
             processed_audio = tiled[:max_len]
         elif sl_len > max_len:
             processed_audio = processed_audio[:max_len]
-        master_mix +=-processed_audio * slot.volume
+        master_mix += processed_audio * slot.volume
     
     master_mix = np.clip(master_mix, -1.0, 1.0)
 
