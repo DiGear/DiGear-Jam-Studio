@@ -103,7 +103,7 @@ def update_fonts(font_name=None):
     global SMALLERFONT, FONT, BIGFONT, TYPER
     if font_name:
         TYPER[0] = font_name
-
+ 
     try:
         SMALLERFONT = pygame.font.SysFont(TYPER[0], TYPER[1])
         FONT = pygame.font.SysFont(TYPER[0], TYPER[2])
@@ -116,7 +116,7 @@ def update_fonts(font_name=None):
 def update_graphics_constants():
     global CIRCLE_COLOR_EMPTY, CIRCLE_COLOR_DEFAULT, STEM_COLORS, TEXT_COLOR
     global SLIDER_COLOR, SLIDER_FILL, SLIDER_TIP
-
+ 
     CIRCLE_COLOR_EMPTY = PALETTE["slot_empty"]
     CIRCLE_COLOR_DEFAULT = PALETTE["slot_default"]
 
@@ -299,14 +299,6 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 
 # -------------------- classes -------------------- 
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-class Slot:
-    def __init__(self):
-        self.stem = self.song_name = self.type = self.key = self.scale = self.bpm = None
-=======
-=======
->>>>>>> Stashed changes
 class Slot(threading.Thread):
     def __init__(self, idx):
         super().__init__()
@@ -321,12 +313,10 @@ class Slot(threading.Thread):
         self.key = None
         self.scale = None
         self.bpm = None
->>>>>>> Stashed changes
         self.volume = 1.0
         self.target_volume = 1.0
         self.offset = 0
         self.half = 0
-        self.empty = True
 
         # thread synchronization
         self.start_event = threading.Event()
@@ -353,7 +343,7 @@ class Slot(threading.Thread):
         if self.empty or self.stem is None:
             return
 
-        audio = self.stem
+        audio = self.stem.astype(np.float32)
         length = len(audio)
         if length == 0:
             return
@@ -362,7 +352,7 @@ class Slot(threading.Thread):
         offset_pos = (self.req_pos + current_offset) % length
 
         end = offset_pos + self.req_frames
-        
+
         if end <= length:
             chunk = audio[offset_pos:end]
         else:
@@ -371,63 +361,8 @@ class Slot(threading.Thread):
             part2 = audio[0:wrap]
             chunk = np.vstack((part1, part2))
 
-        if chunk.ndim == 1:
-            chunk = np.stack([chunk, chunk], axis=1)
-
-        if chunk.shape[0] != self.req_frames:
-            if chunk.shape[0] > self.req_frames:
-                chunk = chunk[:self.req_frames]
-            else:
-                pad = self.req_frames - chunk.shape[0]
-                chunk = np.vstack((chunk, np.zeros((pad, self.req_channels), dtype=np.float32)))
-
-        self.output_buffer = chunk * self.volume
-
-        # thread synchronization
-        self.start_event = threading.Event()
-        self.done_event = threading.Event()
-        self.output_buffer = None
-
-        self.req_pos = 0
-        self.req_frames = 0
-        self.req_channels = 2
-
-    def run(self):
-        while True:
-            self.start_event.wait()
-            self.start_event.clear()
-
-            self.process_audio()
-
-            self.done_event.set()
-
-    def process_audio(self):
-        # silence mega mayhem
-        self.output_buffer = np.zeros((self.req_frames, self.req_channels), dtype=np.float32)
-
-        if self.empty or self.stem is None:
-            return
-
-        audio = self.stem
-        length = len(audio)
-        if length == 0:
-            return
-
-        current_offset = (length // 2) if self.half == 1 else 0
-        offset_pos = (self.req_pos + current_offset) % length
-
-        end = offset_pos + self.req_frames
-        
-        if end <= length:
-            chunk = audio[offset_pos:end]
-        else:
-            wrap = end - length
-            part1 = audio[offset_pos:length]
-            part2 = audio[0:wrap]
-            chunk = np.vstack((part1, part2))
-
-        if chunk.ndim == 1:
-            chunk = np.stack([chunk, chunk], axis=1)
+        if chunk.ndim < 2:
+            chunk = np.hstack([chunk, chunk])
 
         if chunk.shape[0] != self.req_frames:
             if chunk.shape[0] > self.req_frames:
@@ -451,12 +386,8 @@ class AudioEngine:
         self.max_length = max(lengths) if lengths else 0
 
     def audio_callback(self, outdata, frames, time, status):
-<<<<<<< Updated upstream
-        if status: print("audio callback status:", status)
-=======
         if status:
             print("audio callback status:", status)
->>>>>>> Stashed changes
 
         active_lengths = [len(s.stem) for s in self.slots if not s.empty and s.stem is not None]
         self.max_length = max(active_lengths) if active_lengths else 0
@@ -464,35 +395,8 @@ class AudioEngine:
         if self.max_length == 0:
             outdata.fill(0)
             return
-<<<<<<< Updated upstream
-            
+
         self.position %= self.max_length
-        
-        frame_indices = np.arange(frames)
-
-        for slot in self.slots:
-            if slot.empty or slot.stem is None: continue
-
-            audio = slot.stem.astype(np.float32)
-            length = len(audio)
-
-            if length == 0: continue
-
-            offset_pos = (self.position + length // 2 if slot.half == 1 else self.position) % length
-
-            # grab audio at frame offsets accounting for wrap
-            chunk = np.take(audio, (frame_indices + offset_pos) % length, axis=0)
-            
-            # mono to stereo
-            if chunk.ndim < 2: chunk = np.hstack([chunk, chunk])
-
-            mix += chunk * slot.volume
-        
-        outdata[:] = np.clip(mix, -1.0, 1.0)
-=======
-
-        if self.position >= self.max_length:
-            self.position %= self.max_length
 
         for slot in self.slots:
             slot.req_pos = self.position
@@ -509,27 +413,15 @@ class AudioEngine:
         for slot in self.slots:
             mix += slot.output_buffer
 
-        mix = np.clip(mix, -1.0, 1.0)
-        outdata[:] = mix
+        outdata[:] = np.clip(mix, -1.0, 1.0)
         
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
         self.position += frames
         self.position %= self.max_length
 
     def restart(self):
         self.position = 0
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        if self.stream is None or not self.stream.active: self.start()
-=======
-=======
->>>>>>> Stashed changes
         if self.stream is None or not self.stream.active:
             self.start()
->>>>>>> Stashed changes
 
     def start(self):
         self.update_max_length()
@@ -968,7 +860,7 @@ def export_mix_to_wav(filename="export.wav"):
             processed_audio = tiled[:max_len]
         elif sl_len > max_len:
             processed_audio = processed_audio[:max_len]
-        master_mix += processed_audio * slot.volume
+        master_mix +=-processed_audio * slot.volume
     
     master_mix = np.clip(master_mix, -1.0, 1.0)
 
