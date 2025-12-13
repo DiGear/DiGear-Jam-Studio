@@ -507,7 +507,7 @@ class InputBox:
             else:
                 self.active = False
             self.color = self.color_active if self.active else self.color_inactive
-            return self.active
+            return False
 
         if event.type == pygame.KEYDOWN:
             if self.active:
