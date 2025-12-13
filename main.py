@@ -80,7 +80,8 @@ SLIDER_COLOR = None
 SLIDER_FILL = None
 SLIDER_TIP = None
 
-TYPER = ["Arial", 20, 22, 28] # even if you dont have arial for whateve rfuckin reason this doesnt crash it just picks some random font idek which one but it works fine so i dont gaf
+TYPER = ["Arial", 20, 22, 28] # even if you dont have arial for whateve rfuckin reason this doesnt crash it just picks some random font idek which one but it works fine 
+                              #so i dont gaf OH YEAH ITS BEcAUSE I PUT THAT IF STATEMENT THAT MAKES IT do that
 SMALLERFONT = None
 FONT = None
 BIGFONT = None
@@ -175,16 +176,6 @@ SLIDER_W = 120
 SLIDER_H = 10
 CIRCLE_RADIUS = 60
 
-try:
-    btn_offset_off=pygame.image.load('gui/btn_offset_off.png').convert_alpha()
-    btn_offset_on=pygame.image.load('gui/btn_offset_on.png').convert_alpha()
-    btn_offset_hover=pygame.image.load('gui/btn_offset_hover.png').convert_alpha()
-except:
-    # this shouldn't happen
-    btn_offset_off = pygame.Surface((32,32)); btn_offset_off.fill((100,100,100))
-    btn_offset_on = pygame.Surface((32,32)); btn_offset_on.fill((200,200,100))
-    btn_offset_hover = pygame.Surface((32,32)); btn_offset_hover.fill((150,150,150))
-
 # -------------------- ochame kinous -------------------- 
 
 def draw_text_centered(text, font, color, target_rect):
@@ -258,17 +249,64 @@ def draw_slider(x, y, w, h, value):
     pygame.draw.circle(screen, SLIDER_TIP, (knob_x, knob_y), knob_radius)
     pygame.draw.circle(screen, knob_outline_col, (knob_x, knob_y), knob_radius, 2)
     
-def draw_offset_button(x, y, state):
-    mx, my = pygame.mouse.get_pos()
-
-    if state == False:
-        screen.blit(btn_offset_off, (x,y))
+def draw_half_offset(surface, x, y, active, hovered):
+    base_color = PALETTE["accent"] if active else (60, 60, 60)
+    
+    if hovered: 
+        color_bg = lighten_color(base_color, 1.2)
     else:
-        screen.blit(btn_offset_on, (x,y))
+        color_bg = base_color
         
-    #hover highlight
-    if x <= mx < x+32 and y <= my < y+32 and not input_blocked:
-        screen.blit(btn_offset_hover, (x,y))
+    color_border = PALETTE["input_border"]
+    color_text = (255, 255, 255)
+
+    rect = pygame.Rect(x, y, 32, 32)
+    
+    pygame.draw.rect(surface, color_bg, rect, border_radius=4)
+    pygame.draw.rect(surface, color_border, rect, 2, border_radius=4)
+
+    font = SMALLERFONT
+    txt = font.render("1/2", True, color_text)
+    txt_rect = txt.get_rect(center=rect.center)
+    surface.blit(txt, txt_rect)
+
+def draw_mute_solo(surface, x, y, muted, soloed, mx, my):
+    btn_size = 20
+    gap = 4
+    
+    # mute Button
+    r_mute = pygame.Rect(x, y, btn_size, btn_size)
+    
+    mute_base = PALETTE["btn_save"] if muted else (60, 60, 60)
+    if r_mute.collidepoint(mx, my):
+        col_m = lighten_color(mute_base, 1.2)
+    else:
+        col_m = mute_base
+
+    pygame.draw.rect(surface, col_m, r_mute, border_radius=3)
+    pygame.draw.rect(surface, (150,150,150), r_mute, 1, border_radius=3)
+    
+    m_surf = SMALLERFONT.render("M", True, (255,255,255))
+    surface.blit(m_surf, m_surf.get_rect(center=r_mute.center))
+
+    # solo Button
+    r_solo = pygame.Rect(x + btn_size + gap, y, btn_size, btn_size)
+    
+    solo_base = PALETTE["btn_load"] if soloed else (60, 60, 60)
+    if r_solo.collidepoint(mx, my):
+         col_s = lighten_color(solo_base, 1.2)
+    else:
+         col_s = solo_base
+
+    text_col_s = (255, 255, 255)
+    
+    pygame.draw.rect(surface, col_s, r_solo, border_radius=3)
+    pygame.draw.rect(surface, (150,150,150), r_solo, 1, border_radius=3)
+
+    s_surf = SMALLERFONT.render("S", True, text_col_s)
+    surface.blit(s_surf, s_surf.get_rect(center=r_solo.center))
+    
+    return r_mute, r_solo
 
 def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color):
     # draws text with outline and scales if too big
@@ -317,6 +355,8 @@ class Slot(threading.Thread):
         self.target_volume = 1.0
         self.offset = 0
         self.half = 0
+        self.mute = False
+        self.solo = False
 
         # thread synchronization
         self.start_event = threading.Event()
@@ -380,6 +420,7 @@ class AudioEngine:
         self.position = 0
         self.max_length = 0
         self.stream = None
+        self.master_volume = 1.0
 
     def update_max_length(self):
         lengths = [len(s.stem) for s in self.slots if not s.empty and s.stem is not None]
@@ -409,9 +450,22 @@ class AudioEngine:
             slot.done_event.clear()
 
         mix = np.zeros((frames, CHANNELS), dtype=np.float32)
-        
+
+        any_solo = any(s.solo for s in self.slots if not s.empty)
+
         for slot in self.slots:
-            mix += slot.output_buffer
+            if slot.empty: continue
+            
+            should_play = False
+            if any_solo:
+                if slot.solo: should_play = True
+            else:
+                if not slot.mute: should_play = True
+
+            if should_play:
+                mix += slot.output_buffer
+
+        mix *= self.master_volume
 
         outdata[:] = np.clip(mix, -1.0, 1.0)
         
@@ -466,11 +520,11 @@ class InputBox:
         if event.type == pygame.KEYDOWN:
             if self.active:
                 if event.key == pygame.K_RETURN:
-                    pass
+                    return True
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 else:
-                    if event.unicode.isnumeric() or (event.unicode == '.' and '.' not in self.text):
+                    if len(event.unicode) > 0 and (event.unicode.isalnum() or event.unicode in " .-_"):
                         self.text += event.unicode
                 self.txt_surface = self.font.render(self.text, True, PALETTE["text_main"])
         return False
@@ -651,7 +705,6 @@ class Dropdown:
 
 # -------------------- global state -------------------- 
 
-# breaded
 slots = []
 for i in range(12):
     s = Slot(i)
@@ -677,8 +730,10 @@ options_open = False
 available_themes = [f.replace(".json","") for f in os.listdir("themes") if f.endswith(".json")]
 available_fonts = pygame.font.get_fonts()
 available_fonts.sort()
-if "arial" not in available_fonts and len(available_fonts) > 0:
+if "arial" not in available_fonts and len(available_fonts) > 0: # yeah this thing lol
     available_fonts.insert(0, "arial")
+
+all_fonts = available_fonts.copy()
 
 def get_idx(lst, item):
     try: return lst.index(item)
@@ -689,6 +744,11 @@ opt_theme_dd = Dropdown(350, 200, 200, 35, available_themes, default_index=get_i
 opt_font_dd = Dropdown(350, 270, 200, 35, available_fonts, default_index=get_idx(available_fonts, TYPER[0]), max_display_items=14)
 
 opt_notation_btn = pygame.Rect(350, 340, 200, 35)
+
+saving_mode = False
+loading_mode = False
+save_input = InputBox((SCREEN_W - 300)//2, (SCREEN_H - 100)//2 + 20, 300, 40, text="my_jam")
+loading_dd = None
 
 def reset_master():
     global master_bpm, master_key, master_scale
@@ -823,6 +883,8 @@ def clear_slot(i):
     slot.target_volume = 1.0
     slot.offset = 0
     slot.half = 0
+    slot.mute = False
+    slot.solo = False
     print(f"slot {i} cleared")
     
 def shift_slot(i):
@@ -847,6 +909,8 @@ def export_mix_to_wav(filename="export.wav"):
     for slot in slots:
         if slot.empty or slot.stem is None:
             continue
+        
+        if slot.mute: continue
 
         audio = slot.stem
         sl_len = len(audio)
@@ -860,8 +924,9 @@ def export_mix_to_wav(filename="export.wav"):
             processed_audio = tiled[:max_len]
         elif sl_len > max_len:
             processed_audio = processed_audio[:max_len]
-        master_mix +=-processed_audio * slot.volume
+        master_mix += processed_audio * slot.volume
     
+    master_mix *= audio_engine.master_volume
     master_mix = np.clip(master_mix, -1.0, 1.0)
 
     try:
@@ -870,12 +935,13 @@ def export_mix_to_wav(filename="export.wav"):
     except Exception as e:
         print(f"export failed {e}")
 
-def save_project():
+def save_project(filename="project_data.json"):
     data = {
         "master": {
             "bpm": master_bpm,
             "key": master_key,
-            "scale": master_scale
+            "scale": master_scale,
+            "master_volume": audio_engine.master_volume
         },
         "slots": []
     }
@@ -888,36 +954,38 @@ def save_project():
                 "type": slot.type,
                 "volume": slot.volume,
                 "half": slot.half,
-
-                # master override is like also a thing tho
+                "mute": slot.mute,
+                "solo": slot.solo,
                 "detected_key": slot.key, 
                 "detected_scale": slot.scale
             }
             data["slots"].append(slot_data)
     
-    with open("project_data.json", "w") as f:
-        json.dump(data, f, indent=4)
-    print("project saved to project_data.json")
+    try:
+        with open(filename, "w") as f:
+            json.dump(data, f, indent=4)
+        print(f"project saved to {filename}")
+    except Exception as e:
+        print(f"Error saving: {e}")
 
-def load_project(screen_surface):
-    if not os.path.exists("project_data.json"):
+def load_project(filename):
+    if not os.path.exists(filename):
         print("no SAVE found")
         return
 
     overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
     overlay.fill(PALETTE["overlay"])
-    screen_surface.blit(overlay, (0, 0))
+    screen.blit(overlay, (0, 0))
 
     wait_w, wait_h = 300, 100
     wait_rect = pygame.Rect((SCREEN_W - wait_w)//2, (SCREEN_H - wait_h)//2, wait_w, wait_h)
-    pygame.draw.rect(screen_surface, PALETTE["popup_bg"], wait_rect)
-    pygame.draw.rect(screen_surface, PALETTE["popup_border"], wait_rect, 3)
-
-    draw_text_centered("loading project", BIGFONT, PALETTE["text_main"], wait_rect)
+    pygame.draw.rect(screen, PALETTE["popup_bg"], wait_rect)
+    pygame.draw.rect(screen, PALETTE["popup_border"], wait_rect, 3)
+    draw_text_centered("Loading Project...", BIGFONT, PALETTE["text_main"], wait_rect)
     pygame.display.flip()
 
     try:
-        with open("project_data.json", "r") as f:
+        with open(filename, "r") as f:
             data = json.load(f)
 
         audio_engine.stop()
@@ -926,6 +994,9 @@ def load_project(screen_surface):
         master_bpm = data["master"]["bpm"]
         master_key = data["master"]["key"]
         master_scale = data["master"]["scale"]
+        
+        if "master_volume" in data["master"]:
+            audio_engine.master_volume = data["master"]["master_volume"]
         
         for i in range(12):
             clear_slot(i)
@@ -938,7 +1009,6 @@ def load_project(screen_surface):
             stem_type = slot_data["type"]
             
             song_path = None
-            
             for folder in SONG_FOLDERS:
                 potential_path = os.path.join(folder, song_name)
                 if os.path.exists(potential_path):
@@ -949,11 +1019,11 @@ def load_project(screen_surface):
                 add_stem_to_slot(idx, song_path, stem_type)
                 
                 s = slots[idx]
-                s.volume = slot_data["volume"]
-                s.target_volume = slot_data["volume"]
-                s.half = slot_data["half"]
-                
-                pass 
+                s.volume = slot_data.get("volume", 1.0)
+                s.target_volume = slot_data.get("volume", 1.0)
+                s.half = slot_data.get("half", 0)
+                s.mute = slot_data.get("mute", False)
+                s.solo = slot_data.get("solo", False)
             else:
                 print(f"'{song_name}' not found during load.")
 
@@ -991,7 +1061,7 @@ while running:
 
     mx, my = pygame.mouse.get_pos() 
 
-    input_blocked = panel_open or manual_override_open or options_open
+    input_blocked = panel_open or manual_override_open or options_open or saving_mode or loading_mode
 
     # slider sm64
     lerp_speed = 0.33
@@ -1199,8 +1269,18 @@ while running:
         draw_dynamic_text(screen, stype, FONT, cx, cy, max_text_width, PALETTE["text_dim"])
         if mode_label:
             draw_dynamic_text(screen, mode_label, FONT, cx, cy + 22, max_text_width, PALETTE["text_mode_label"])
+
+        off_x, off_y = cx + 30, cy + 30
+        off_hover = False
+        if off_x <= mx <= off_x + 32 and off_y <= my <= off_y + 32 and not input_blocked:
+            off_hover = True
             
-        draw_offset_button(cx+30, cy+30, slot.half == 1)
+        draw_half_offset(screen, off_x, off_y, slot.half == 1, off_hover)
+
+        ms_x, ms_y = cx - 45, cy + 32
+
+        pygame.draw.rect(screen, (30,30,30), (ms_x-2, ms_y-2, 48, 24), border_radius=4) 
+        draw_mute_solo(screen, ms_x, ms_y, slot.mute, slot.solo, mx, my)
 
         sx = cx - SLIDER_W // 2
         sy = cy + CIRCLE_RADIUS + 15
@@ -1289,14 +1369,22 @@ while running:
         
         title = BIGFONT.render("Options", True, TEXT_COLOR)
         screen.blit(title, (360, 115))
-        
-        screen.blit(FONT.render("Theme:", True, TEXT_COLOR), (250, 205))
+
+        screen.blit(FONT.render(f"Master Vol: {int(audio_engine.master_volume * 100)}%", True, TEXT_COLOR), (250, 140))
+        vol_rect = pygame.Rect(350, 170, 200, 15)
+
+        draw_slider(vol_rect.x, vol_rect.y, vol_rect.width, vol_rect.height, audio_engine.master_volume)
+
+        screen.blit(FONT.render("Theme:", True, TEXT_COLOR), (250, 195))
+        opt_theme_dd.rect.y = 190
         opt_theme_dd.draw(screen)
-        
-        screen.blit(FONT.render("Font:", True, TEXT_COLOR), (250, 275))
+
+        screen.blit(FONT.render("Font:", True, TEXT_COLOR), (250, 250)) 
+        opt_font_dd.rect.y = 245
         opt_font_dd.draw(screen)
         
-        screen.blit(FONT.render("Notation:", True, TEXT_COLOR), (250, 345))
+        screen.blit(FONT.render("Notation:", True, TEXT_COLOR), (250, 305))
+        opt_notation_btn.y = 300
         
         not_col = PALETTE["input_active"] if USE_FLATS else PALETTE["btn_manual"]
         not_text = "Flats (b)" if USE_FLATS else "Sharps (#)"
@@ -1308,23 +1396,110 @@ while running:
 
         opt_close_rect = pygame.Rect(335, 480, 170, 50)
         if opt_close_rect.collidepoint(mx, my):
-            pygame.draw.rect(screen, PALETTE["btn_confirm_hl"], opt_close_rect)
+             pygame.draw.rect(screen, PALETTE["btn_confirm_hl"], opt_close_rect)
         else:
-            pygame.draw.rect(screen, PALETTE["btn_confirm"], opt_close_rect)
+             pygame.draw.rect(screen, PALETTE["btn_confirm"], opt_close_rect)
         
         draw_text_centered("CLOSE", BIGFONT, TEXT_COLOR, opt_close_rect)
 
         opt_theme_dd.draw_list(screen)
         opt_font_dd.draw_list(screen)
 
-    # -------------------- the fukin input clicky handler -------------------- 
+    # -------------------- Save / Load Overlays --------------------
+
+    if saving_mode:
+        overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        overlay.fill((0,0,0,200))
+        screen.blit(overlay, (0,0))
+        
+        box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-200)//2, 400, 200)
+        pygame.draw.rect(screen, PALETTE["panel_bg"], box_rect)
+        pygame.draw.rect(screen, PALETTE["accent"], box_rect, 2)
+        
+        draw_text_centered("Save Project As...", BIGFONT, PALETTE["text_main"], 
+                           pygame.Rect(box_rect.x, box_rect.y + 20, 400, 40))
+        
+        save_input.rect.center = box_rect.center
+        save_input.draw(screen)
+        
+        draw_text_centered("Press Enter to Save", SMALLERFONT, PALETTE["text_dim"], 
+                           pygame.Rect(box_rect.x, box_rect.bottom - 40, 400, 30))
+
+    if loading_mode:
+        overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        overlay.fill((0,0,0,200))
+        screen.blit(overlay, (0,0))
+        
+        box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-300)//2, 400, 300)
+        pygame.draw.rect(screen, PALETTE["panel_bg"], box_rect)
+        pygame.draw.rect(screen, PALETTE["btn_load"], box_rect, 2)
+        
+        draw_text_centered("Select File to Load", BIGFONT, PALETTE["text_main"], 
+                           pygame.Rect(box_rect.x, box_rect.y + 20, 400, 40))
+        
+        if loading_dd:
+            loading_dd.draw(screen)
+            
+
+        load_confirm = pygame.Rect(box_rect.centerx - 60, box_rect.bottom - 60, 120, 40)
+        if load_confirm.collidepoint(mx, my):
+            pygame.draw.rect(screen, PALETTE["btn_confirm_hl"], load_confirm)
+        else:
+             pygame.draw.rect(screen, PALETTE["btn_confirm"], load_confirm)
+        draw_text_centered("LOAD", FONT, TEXT_COLOR, load_confirm)
+
+        if loading_dd:
+            loading_dd.draw_list(screen)
+
+    # -------------------- Input Handler -------------------- 
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
         mx, my = pygame.mouse.get_pos()
-        
+
+        if saving_mode:
+            if save_input.handle_event(event):
+                 fname = save_input.text
+                 if len(fname) > 0:
+                     if not fname.endswith(".json"): fname += ".json"
+                     save_project(fname)
+                     saving_mode = False
+                     pygame.key.stop_text_input()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-200)//2, 400, 200)
+                if not box_rect.collidepoint(mx, my):
+                    saving_mode = False
+                    pygame.key.stop_text_input()
+            continue
+
+        if loading_mode:
+            if loading_dd:
+                if loading_dd.handle_event(event):
+                    continue
+            
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                box_rect = pygame.Rect((SCREEN_W-400)//2, (SCREEN_H-300)//2, 400, 300)
+                load_confirm = pygame.Rect(box_rect.centerx - 60, box_rect.bottom - 60, 120, 40)
+                
+                if load_confirm.collidepoint(mx, my):
+                    sel = loading_dd.get_selected()
+                    if sel:
+                        load_project(sel)
+                        if master_bpm:
+                             mt_bpm.text = str(int(master_bpm))
+                             mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, PALETTE["text_main"])
+                        if master_key and master_key in mt_key.options: mt_key.index = mt_key.options.index(master_key)
+                        if master_scale and master_scale in mt_scale.options: mt_scale.index = mt_scale.options.index(master_scale)
+                        loading_mode = False
+
+                if not box_rect.collidepoint(mx, my) and loading_dd and not loading_dd.is_open:
+                    loading_mode = False
+
+            continue
+
         if options_open:
             if opt_theme_dd.handle_event(event):
                 sel = opt_theme_dd.get_selected()
@@ -1345,10 +1520,16 @@ while running:
                     dd_stem.font = SMALLERFONT
                     mt_key.font = SMALLERFONT
                     mt_scale.font = SMALLERFONT
-
                     save_config()
                 continue
-            
+
+            if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION:
+                if pygame.mouse.get_pressed()[0]:
+                    vol_rect = pygame.Rect(350, 170, 200, 15)
+                    if vol_rect.collidepoint(mx, my): # i had a thing here that made a REALLY big hitbox whoops
+                         rel_x = mx - 350
+                         audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if opt_notation_btn.collidepoint(mx, my):
                     USE_FLATS = not USE_FLATS
@@ -1544,29 +1725,13 @@ while running:
                 continue
 
             if btn_save_rect.collidepoint(mx, my) and event.button == 1:
-                save_project()
+                saving_mode = True
+                pygame.key.start_text_input()
             
             if btn_load_rect.collidepoint(mx, my) and event.button == 1:
-                load_project(screen)
-                if master_bpm:
-                    mt_bpm.text = str(int(master_bpm))
-                    mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, PALETTE["text_main"])
-
-                # bpm typer
-                if master_bpm:
-                    mt_bpm.text = str(int(master_bpm))
-                    mt_bpm.txt_surface = mt_bpm.font.render(mt_bpm.text, True, PALETTE["text_main"])
-                else:
-                    mt_bpm.text = ""
-                    mt_bpm.txt_surface = mt_bpm.font.render("", True, PALETTE["text_main"])
-                
-                # sync dropdowns
-                if master_key and master_key in mt_key.options: 
-                    mt_key.index = mt_key.options.index(master_key)
-                if master_scale and master_scale in mt_scale.options: 
-                    mt_scale.index = mt_scale.options.index(master_scale)
-                
-                pygame.key.start_text_input()
+                loading_mode = True
+                files = [f for f in os.listdir(".") if f.endswith(".json") and f != "config.json"]
+                loading_dd = Dropdown((SCREEN_W-300)//2, (SCREEN_H-300)//2 + 80, 300, 35, files, max_display_items=5)
                 continue
 
             # right click clear slot
@@ -1582,33 +1747,36 @@ while running:
             if event.button == 1:
                 for slot_index in range(12):
                 
-                    slot_button_clicked = False # used to defuse priority tantrums
+                    slot_button_clicked = False # this does shit
                     
-                    btn_x=150 + (200 * (slot_index % 4))
-                    btn_y=180 + (250 * (slot_index // 4))
+                    cx = 120 + (slot_index % 4) * 200
+                    cy = 150 + (slot_index // 4) * 250
                     
-                    slot_btn=pygame.Rect(btn_x,btn_y,btn_x+32,btn_y+32)
+                    off_x, off_y = cx + 30, cy + 30
+                    if off_x <= mx <= off_x + 32 and off_y <= my <= off_y + 32:
+                         shift_slot(slot_index)
+                         slot_button_clicked = True
                     
-                    if btn_x <= mx <= btn_x+32 and btn_y <= my <= btn_y+32:
+                    ms_x, ms_y = cx - 45, cy + 32
 
-                        shift_slot(slot_index)
-                    
-                        slot_button_clicked=True
-                    
+                    if ms_x <= mx <= ms_x + 20 and ms_y <= my <= ms_y + 20:
+                         slots[slot_index].mute = not slots[slot_index].mute
+                         slot_button_clicked = True
+
+                    if ms_x + 24 <= mx <= ms_x + 44 and ms_y <= my <= ms_y + 20:
+                         slots[slot_index].solo = not slots[slot_index].solo
+                         slot_button_clicked = True
+
                     if not slot_button_clicked:
-                        cx = 120 + (slot_index % 4) * 200
-                        cy = 150 + (slot_index // 4) * 250
                         sx = cx - SLIDER_W // 2
                         sy = cy + CIRCLE_RADIUS + 15
                         
-                        # check slider
                         if sx <= mx <= sx + SLIDER_W and sy <= my <= sy + SLIDER_H:
                             dragging_slider = slot_index
                             rel = mx - sx
                             slots[slot_index].target_volume = max(0.0, min(1.0, rel / SLIDER_W))
                             break
                         
-                        # check circle click
                         if dragging_slider is None:
                             if (mx - cx)**2 + (my - cy)**2 < CIRCLE_RADIUS**2:
                                 panel_open = True
@@ -1629,13 +1797,17 @@ while running:
             slots[i].target_volume = max(0.0, min(1.0, rel / SLIDER_W))
 
         if event.type == pygame.MOUSEWHEEL:
-            if options_open and (opt_theme_dd.handle_event(event) or opt_font_dd.handle_event(event)): 
-                continue
+            if options_open:
+                if opt_theme_dd.handle_event(event) or opt_font_dd.handle_event(event): 
+                    continue
             
             if panel_open and (dd_song.handle_event(event) or dd_stem.handle_event(event)):
                 continue
             
             if manual_override_open and (mt_key.handle_event(event) or mt_scale.handle_event(event)):
+                continue
+            
+            if loading_mode and loading_dd and loading_dd.handle_event(event):
                 continue
 
             if not input_blocked:
