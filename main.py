@@ -10,6 +10,8 @@ import pyrubberband as rb
 import sounddevice as sd
 import soundfile as sf
 
+from tqdm import tqdm
+
 # -------------------- this shit is vaguely related --------------------
 
 KEY_TO_INT = {
@@ -999,77 +1001,73 @@ def get_song_list():
     return all_songs
 
 
-def add_stem_to_slot(slot_id, song_folder, stem_type):
+def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
     global master_bpm, master_key, master_scale
 
-    STANDARD_STEMS = ["vocals", "bass", "drums", "lead"]
+    with tqdm(
+        total=4, desc=f"Loading {stem_type}", disable=not show_progress, leave=False
+    ) as pbar:
 
-    stem_bpm = 0
-    stem_key = ""
-    stem_scale = ""
-    stem_audio = None
-    custom_color = None
+        STANDARD_STEMS = ["vocals", "bass", "drums", "lead"]
+        stem_bpm = 0
+        stem_key = ""
+        stem_scale = ""
+        stem_audio = None
+        custom_color = None
 
-    if stem_type in STANDARD_STEMS:
+        # met a data
+        if stem_type in STANDARD_STEMS:
+            meta_path = os.path.join(song_folder, "meta.json")
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
 
-        meta_path = os.path.join(song_folder, "meta.json")
-        with open(meta_path, "r") as f:
-            meta = json.load(f)
+            stem_key = meta["key"]
+            stem_bpm = meta["bpm"]
 
-        stem_key = meta["key"]
-        stem_bpm = meta["bpm"]
+            if master_bpm is None:
+                master_bpm = stem_bpm
+                master_key = stem_key
+                master_scale = meta.get("scale", "major")
+                if show_progress:
+                    tqdm.write(f"Master set to {master_key} {master_scale}.")
 
-        # set master if first track
-        if master_bpm is None:
-            master_bpm = stem_bpm
-            master_key = stem_key
-            master_scale = meta.get("scale", "major")
-            print(f"Master set to {master_key} {master_scale}.")
-
-        if stem_type == "drums":
-            file_to_load = "drums.ogg"
-            stem_scale = "neutral"
-        else:
-            target_scale = master_scale
-            target_path = os.path.join(song_folder, f"{stem_type}_{target_scale}.ogg")
-
-            if os.path.exists(target_path):
-                file_to_load = f"{stem_type}_{target_scale}.ogg"
-                stem_scale = target_scale
+            if stem_type == "drums":
+                file_to_load = "drums.ogg"
+                stem_scale = "neutral"
             else:
-                fallback_scale = "minor" if target_scale == "major" else "major"
-                fallback_path = os.path.join(
-                    song_folder, f"{stem_type}_{fallback_scale}.ogg"
+                target_scale = master_scale
+                target_path = os.path.join(
+                    song_folder, f"{stem_type}_{target_scale}.ogg"
                 )
 
-                if os.path.exists(fallback_path):
-                    file_to_load = f"{stem_type}_{fallback_scale}.ogg"
-                    stem_scale = fallback_scale
-                    print(
-                        f"No matching mode file found. Falling back to the relative mode of {stem_scale}."
-                    )
+                if os.path.exists(target_path):
+                    file_to_load = f"{stem_type}_{target_scale}.ogg"
+                    stem_scale = target_scale
                 else:
-                    print(f"ERROR: No standard stem files found for {stem_type}.")
-                    return
+                    fallback_scale = "minor" if target_scale == "major" else "major"
+                    fallback_path = os.path.join(
+                        song_folder, f"{stem_type}_{fallback_scale}.ogg"
+                    )
 
-        # load Audio
-        full_path = os.path.join(song_folder, file_to_load)
-        stem_audio = load_audio_data(full_path)
+                    if os.path.exists(fallback_path):
+                        file_to_load = f"{stem_type}_{fallback_scale}.ogg"
+                        stem_scale = fallback_scale
+                    else:
+                        tqdm.write(
+                            f"ERROR: No standard stem files found for {stem_type}."
+                        )
+                        return
 
-    else:  # custom stem shit
-        print(f"Detected custom stem: {stem_type}")
-        json_path = os.path.join(song_folder, f"{stem_type}.json")
-        ogg_path = os.path.join(song_folder, f"{stem_type}.ogg")
+            pbar.update(1)
 
-        if not os.path.exists(json_path):
-            print(f"ERROR: Custom stem {stem_type} missing .json")
-            return
+            # load the shit
+            full_path = os.path.join(song_folder, file_to_load)
+            stem_audio = load_audio_data(full_path)
 
-        elif not os.path.exists(ogg_path):
-            print(f"ERROR: Custom stem {stem_type} missing .ogg")
-            return
+        else:
+            json_path = os.path.join(song_folder, f"{stem_type}.json")
+            ogg_path = os.path.join(song_folder, f"{stem_type}.ogg")
 
-        try:
             with open(json_path, "r") as f:
                 data = json.load(f)
                 stem_bpm = data["bpm"]
@@ -1078,77 +1076,68 @@ def add_stem_to_slot(slot_id, song_folder, stem_type):
                 if "color" in data:
                     custom_color = tuple(data["color"])
 
-        except Exception as e:
-            print(f"Error reading custom stem JSON: {e}")
-            return
+            pbar.update(1)
 
-        if master_bpm is None:
-            master_bpm = stem_bpm
-            master_key = stem_key
-            master_scale = stem_scale
-            print(f"Master tuning set from custom stem to {master_key} {master_scale}.")
+            stem_audio = load_audio_data(ogg_path)
 
-        stem_audio = load_audio_data(ogg_path)
+        pbar.update(1)
 
-    # time Stretch
-    adjusted_bpm = match_bpm_timescale(stem_bpm, master_bpm)
-    stretch_ratio = master_bpm / adjusted_bpm
-    if stretch_ratio != 1.0:
-        print(
-            f"Applying time stretch: {stem_bpm} base BPM -> {adjusted_bpm} multiple BPM -> {master_bpm} adjusted BPM"
-        )
-        stem_audio = rb.time_stretch(stem_audio, SAMPLE_RATE, stretch_ratio)
+        # time streetch
+        adjusted_bpm = match_bpm_timescale(stem_bpm, master_bpm)
+        stretch_ratio = master_bpm / adjusted_bpm
+        if stretch_ratio != 1.0:
+            stem_audio = rb.time_stretch(stem_audio, SAMPLE_RATE, stretch_ratio)
 
-    # pitch shift (now with fallback shit)
-    if stem_type != "drums" and stem_scale != "neutral":
-        semis = key_shift_semitones(master_key, stem_key)
+        pbar.update(1)
 
-        if stem_scale != "master_Scale":
-            print("Applying relative mode offset.")
-            if stem_scale == "minor" and master_scale == "major":
-                semis -= 3
-            elif stem_scale == "major" and master_scale == "minor":
-                semis += 3
+        # pitch shift
+        if stem_type != "drums" and stem_scale != "neutral":
+            semis = key_shift_semitones(master_key, stem_key)
+            if stem_scale != "master_Scale":
+                if stem_scale == "minor" and master_scale == "major":
+                    semis -= 3
+                elif stem_scale == "major" and master_scale == "minor":
+                    semis += 3
 
-        if semis != 0:
-            print(f"Pitch shift: {semis:+d} semitones.")
-            stem_audio = rb.pitch_shift(stem_audio, SAMPLE_RATE, semis)
+            if semis != 0:
+                stem_audio = rb.pitch_shift(stem_audio, SAMPLE_RATE, semis)
 
-    # sync length
-    if audio_engine.max_length == 0:
-        audio_engine.max_length = len(stem_audio)
+        if audio_engine.max_length == 0:
+            audio_engine.max_length = len(stem_audio)
 
-    master_length = audio_engine.max_length
-    cur_len = len(stem_audio)
+        master_length = audio_engine.max_length
+        cur_len = len(stem_audio)
 
-    # micro stretch to align samples exactly
-    if cur_len != master_length:
-        ratio = master_length / cur_len
-        if 0.5 < ratio < 2.0:
-            stem_audio = rb.time_stretch(stem_audio, SAMPLE_RATE, 1 / ratio)
-            if len(stem_audio) > master_length:
-                stem_audio = stem_audio[:master_length]
-            elif len(stem_audio) < master_length:
-                pad = master_length - len(stem_audio)
-                stem_audio = np.vstack(
-                    (stem_audio, np.zeros((pad, stem_audio.shape[1]), dtype=np.float32))
-                )
+        if cur_len != master_length:
+            ratio = master_length / cur_len
+            if 0.5 < ratio < 2.0:
+                stem_audio = rb.time_stretch(stem_audio, SAMPLE_RATE, 1 / ratio)
+                if len(stem_audio) > master_length:
+                    stem_audio = stem_audio[:master_length]
+                elif len(stem_audio) < master_length:
+                    pad = master_length - len(stem_audio)
+                    stem_audio = np.vstack(
+                        (
+                            stem_audio,
+                            np.zeros((pad, stem_audio.shape[1]), dtype=np.float32),
+                        )
+                    )
 
-    with audio_engine.lock:
-        slot = slots[slot_id]
-        slot.empty = False
-        slot.stem = stem_audio
-        slot.song_name = os.path.basename(song_folder)
-        slot.type = stem_type
-        slot.key = stem_key
-        slot.scale = stem_scale
-        slot.bpm = stem_bpm
-        slot.offset = 0
-        slot.half = 0
-        slot.custom_color = custom_color
+        with audio_engine.lock:
+            slot = slots[slot_id]
+            slot.empty = False
+            slot.stem = stem_audio
+            slot.song_name = os.path.basename(song_folder)
+            slot.type = stem_type
+            slot.key = stem_key
+            slot.scale = stem_scale
+            slot.bpm = stem_bpm
+            slot.offset = 0
+            slot.half = 0
+            slot.custom_color = custom_color
 
-    print(f"Loaded stem {stem_type}")
-    audio_engine.update_max_length()
+        audio_engine.update_max_length()
+        pbar.update(1)
 
 
 def clear_slot(i):
@@ -1300,7 +1289,7 @@ def load_project(filename):
 
         audio_engine.max_length = 0
 
-        for slot_data in data["slots"]:
+        for slot_data in tqdm(data["slots"], desc="Loading Project", unit="stem"):
             idx = slot_data["index"]
             song_name = slot_data["song_name"]
             stem_type = slot_data["type"]
@@ -1313,7 +1302,7 @@ def load_project(filename):
                     break
 
             if song_path:
-                add_stem_to_slot(idx, song_path, stem_type)
+                add_stem_to_slot(idx, song_path, stem_type, show_progress=False)
 
                 s = slots[idx]
                 s.volume = slot_data.get("volume", 1.0)
@@ -1327,7 +1316,7 @@ def load_project(filename):
                 ):
                     s.custom_color = tuple(slot_data["custom_color"])
             else:
-                print(f"'{song_name}' not found during load.")
+                tqdm.write(f"Warning: '{song_name}' not found during load.")
 
         audio_engine.start()
         print("Project loaded successfully.")

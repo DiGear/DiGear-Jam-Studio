@@ -22,7 +22,7 @@ A real-time Python audio mixing application that automatically synchronizes pitc
 You need **Python 3.x** and the following libraries:
 
 ```bash
-pip install numpy soundfile sounddevice pygame pyrubberband
+pip install numpy soundfile sounddevice pygame pyrubberband tqdm
 ```
 
 > **Note:** `pyrubberband` requires the **Rubberband CLI tool** to be installed on your system path. This specific app includes the binaries, but sometimes it needs to be installed to your system path anyways lol.
