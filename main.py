@@ -290,6 +290,19 @@ def load_audio_data(path):
     return audio
 
 
+def get_stem_types(song_path):
+    found_stems = ["vocals", "bass", "drums", "lead"]
+
+    if os.path.exists(song_path):
+        for f in os.listdir(song_path):
+            if f.endswith(".json") and f != "meta.json":
+                stem_name = f.replace(".json", "")
+                if os.path.exists(os.path.join(song_path, stem_name + ".ogg")):
+                    if stem_name not in found_stems:
+                        found_stems.append(stem_name)
+    return found_stems
+
+
 def draw_slider(x, y, w, h, value):
     track_outline_col = darken_color(slider_color, factor=0.4)
     knob_outline_col = darken_color(slider_tip, factor=0.4)
@@ -449,6 +462,7 @@ class Slot(threading.Thread):
         self.half = 0
         self.mute = False
         self.solo = False
+        self.custom_color = None
 
         # thread synchronization
         self.start_event = threading.Event()
@@ -964,6 +978,7 @@ def reset_master():
     master_key = None
     master_scale = None
 
+
 def restart_application():
     global master_bpm, master_key, master_scale
 
@@ -982,6 +997,7 @@ def restart_application():
     audio_engine.start()
 
     print("Restart Complete.")
+
 
 def get_song_list():
     all_songs = []
@@ -1006,75 +1022,112 @@ def get_song_list():
 def add_stem_to_slot(slot_id, song_folder, stem_type):
     global master_bpm, master_key, master_scale
 
-    meta_path = os.path.join(song_folder, "meta.json")
-    with open(meta_path, "r") as f:
-        meta = json.load(f)
+    STANDARD_STEMS = ["vocals", "bass", "drums", "lead"]
 
-    song_key = meta["key"]
-    song_bpm = meta["bpm"]
+    stem_bpm = 0
+    stem_key = ""
+    stem_scale = ""
+    stem_audio = None
+    custom_color = None
 
-    print(f"\nLoading stem '{stem_type}' from: {song_folder}")
+    if stem_type in STANDARD_STEMS:
 
-    # set master if first track
-    if master_bpm is None:
-        master_bpm = song_bpm
-        master_key = song_key
-        master_scale = meta.get("scale", "major")
-        print(f"Master set to {master_key} {master_scale}.")
+        meta_path = os.path.join(song_folder, "meta.json")
+        with open(meta_path, "r") as f:
+            meta = json.load(f)
 
-    file_to_load = loaded_scale = ""
+        stem_key = meta["key"]
+        stem_bpm = meta["bpm"]
 
-    if stem_type == "drums":
-        file_to_load = "drums.ogg"
-        loaded_scale = "neutral"
-    else:
-        target_scale = master_scale
+        # set master if first track
+        if master_bpm is None:
+            master_bpm = stem_bpm
+            master_key = stem_key
+            master_scale = meta.get("scale", "major")
+            print(f"Master set to {master_key} {master_scale}.")
 
-        target_path = os.path.join(song_folder, f"{stem_type}_{target_scale}.ogg")
-
-        if os.path.exists(target_path):
-            file_to_load = f"{stem_type}_{target_scale}.ogg"
-            loaded_scale = target_scale
+        if stem_type == "drums":
+            file_to_load = "drums.ogg"
+            stem_scale = "neutral"
         else:
-            fallback_scale = "minor" if target_scale == "major" else "major"
-            fallback_path = os.path.join(
-                song_folder, f"{stem_type}_{fallback_scale}.ogg"
-            )
+            target_scale = master_scale
+            target_path = os.path.join(song_folder, f"{stem_type}_{target_scale}.ogg")
 
-            if os.path.exists(fallback_path):
-                file_to_load = f"{stem_type}_{fallback_scale}.ogg"
-                loaded_scale = fallback_scale
-                print(
-                    f"No matching mode file found. Falling back to the relative mode of {loaded_scale}."
-                )
+            if os.path.exists(target_path):
+                file_to_load = f"{stem_type}_{target_scale}.ogg"
+                stem_scale = target_scale
             else:
-                print(f"ERROR: No stem files found for {stem_type}.")
-                return
+                fallback_scale = "minor" if target_scale == "major" else "major"
+                fallback_path = os.path.join(
+                    song_folder, f"{stem_type}_{fallback_scale}.ogg"
+                )
 
-    # load Audio
-    full_path = os.path.join(song_folder, file_to_load)
-    stem_audio = load_audio_data(full_path)
+                if os.path.exists(fallback_path):
+                    file_to_load = f"{stem_type}_{fallback_scale}.ogg"
+                    stem_scale = fallback_scale
+                    print(
+                        f"No matching mode file found. Falling back to the relative mode of {stem_scale}."
+                    )
+                else:
+                    print(f"ERROR: No standard stem files found for {stem_type}.")
+                    return
+
+        # load Audio
+        full_path = os.path.join(song_folder, file_to_load)
+        stem_audio = load_audio_data(full_path)
+
+    else:  # custom stem shit
+        print(f"Detected custom stem: {stem_type}")
+        json_path = os.path.join(song_folder, f"{stem_type}.json")
+        ogg_path = os.path.join(song_folder, f"{stem_type}.ogg")
+
+        if not os.path.exists(json_path):
+            print(f"ERROR: Custom stem {stem_type} missing .json")
+            return
+
+        elif not os.path.exists(ogg_path):
+            print(f"ERROR: Custom stem {stem_type} missing .ogg")
+            return
+
+        try:
+            with open(json_path, "r") as f:
+                data = json.load(f)
+                stem_bpm = data["bpm"]
+                stem_key = data["key"]
+                stem_scale = data.get("scale", "neutral")
+                if "color" in data:
+                    custom_color = tuple(data["color"])
+
+        except Exception as e:
+            print(f"Error reading custom stem JSON: {e}")
+            return
+
+        if master_bpm is None:
+            master_bpm = stem_bpm
+            master_key = stem_key
+            master_scale = stem_scale
+            print(f"Master tuning set from custom stem to {master_key} {master_scale}.")
+
+        stem_audio = load_audio_data(ogg_path)
 
     # time Stretch
-    adjusted_bpm = match_bpm_timescale(song_bpm, master_bpm)
+    adjusted_bpm = match_bpm_timescale(stem_bpm, master_bpm)
     stretch_ratio = master_bpm / adjusted_bpm
     if stretch_ratio != 1.0:
         print(
-            f"Applying time stretch: {song_bpm} base BPM -> {adjusted_bpm} multiple BPM -> {master_bpm} adjusted BPM"
+            f"Applying time stretch: {stem_bpm} base BPM -> {adjusted_bpm} multiple BPM -> {master_bpm} adjusted BPM"
         )
         stem_audio = rb.time_stretch(stem_audio, SAMPLE_RATE, stretch_ratio)
 
     # pitch shift (now with fallback shit)
-    if stem_type != "drums":
-        semis = key_shift_semitones(master_key, song_key)
-        if loaded_scale == master_scale:
-            pass
+    if stem_type != "drums" and stem_scale != "neutral":
+        semis = key_shift_semitones(master_key, stem_key)
 
-        elif loaded_scale != "neutral":
+        if stem_scale != "master_Scale":
             print("Applying relative mode offset.")
-            if loaded_scale == "minor" and master_scale == "major":
+            if stem_scale == "minor" and master_scale == "major":
                 semis -= 3
-            elif loaded_scale == "major" and master_scale == "minor":
+            elif stem_scale == "major" and master_scale == "minor":
                 semis += 3
 
         if semis != 0:
@@ -1106,13 +1159,14 @@ def add_stem_to_slot(slot_id, song_folder, stem_type):
     slot.stem = stem_audio
     slot.song_name = os.path.basename(song_folder)
     slot.type = stem_type
-    slot.key = song_key
-    slot.scale = loaded_scale
-    slot.bpm = song_bpm
+    slot.key = stem_key
+    slot.scale = stem_scale
+    slot.bpm = stem_bpm
     slot.offset = 0
     slot.half = 0
+    slot.custom_color = custom_color
 
-    print("Stem loaded.")
+    print(f"Loaded stem {stem_type}")
     audio_engine.update_max_length()
 
 
@@ -1128,6 +1182,7 @@ def clear_slot(i):
     slot.half = 0
     slot.mute = False
     slot.solo = False
+    slot.custom_color = None
     print(f"Slot {i} cleared.")
 
 
@@ -1211,6 +1266,7 @@ def save_project(filename="project_data.json"):
                 "solo": slot.solo,
                 "detected_key": slot.key,
                 "detected_scale": slot.scale,
+                "custom_color": slot.custom_color,
             }
             data["slots"].append(slot_data)
 
@@ -1285,6 +1341,11 @@ def load_project(filename):
                 s.half = slot_data.get("half", 0)
                 s.mute = slot_data.get("mute", False)
                 s.solo = slot_data.get("solo", False)
+                if (
+                    "custom_color" in slot_data
+                    and slot_data["custom_color"] is not None
+                ):
+                    s.custom_color = tuple(slot_data["custom_color"])
             else:
                 print(f"'{song_name}' not found during load.")
 
@@ -1300,7 +1361,7 @@ dropdown_song_select = DropdownMenu(
     240, 200, 360, 35, get_song_list(), max_display_items=16
 )
 dropdown_stem_type_select = DropdownMenu(
-    240, 260, 360, 35, ["vocals", "bass", "lead", "drums"], max_display_items=4
+    240, 260, 360, 35, ["vocals", "bass", "lead", "drums"], max_display_items=8
 )
 
 # manual tune
@@ -1562,7 +1623,10 @@ while running:
             color = circle_color_empty
             outline_color = darken_color(color)
         else:
-            color = stem_colors.get(slot.type, circle_color_default)
+            if slot.custom_color:
+                color = slot.custom_color
+            else:
+                color = stem_colors.get(slot.type, circle_color_default)
 
             should_pulse = False
 
@@ -2185,9 +2249,16 @@ while running:
 
         # stem select inputs
         if panel_open:
-            if dropdown_song_select.handle_event(
-                event
-            ) or dropdown_stem_type_select.handle_event(event):
+            if dropdown_song_select.handle_event(event):
+                sel_song_path = dropdown_song_select.get_selected()
+
+                if sel_song_path and os.path.exists(sel_song_path):
+                    new_stems = get_stem_types(sel_song_path)
+                    dropdown_stem_type_select.update_options(new_stems)
+                    dropdown_stem_type_select.index = 0
+                continue
+
+            if dropdown_stem_type_select.handle_event(event):
                 continue
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
