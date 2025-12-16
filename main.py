@@ -1076,6 +1076,13 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
                 if "color" in data:
                     custom_color = tuple(data["color"])
 
+            if master_bpm is None:
+                master_bpm = stem_bpm
+                master_key = stem_key
+                master_scale = stem_scale
+                if show_progress:
+                    tqdm.write(f"Master tuning set from custom stem to {master_key} {master_scale}.")
+
             pbar.update(1)
 
             stem_audio = load_audio_data(ogg_path)
