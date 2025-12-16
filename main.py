@@ -245,15 +245,11 @@ def key_shift_semitones(target_key, source_key):
 def match_bpm_timescale(original_bpm, master_bpm):
     # find best bpm match
     candidates = [
-        original_bpm * 0.0625,
-        original_bpm * 0.125,
         original_bpm * 0.25,
         original_bpm * 0.5,  # half time
         original_bpm,  # og
         original_bpm * 2,  # double time
         original_bpm * 4,
-        original_bpm * 8,
-        original_bpm * 16,
     ]
     return min(candidates, key=lambda b: abs(b - master_bpm))
 
