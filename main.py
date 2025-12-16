@@ -1215,7 +1215,6 @@ def save_project(filename="project_data.json"):
             "bpm": master_bpm,
             "key": master_key,
             "scale": master_scale,
-            "master_volume": audio_engine.master_volume,
         },
         "slots": [],
     }
@@ -1277,9 +1276,6 @@ def load_project(filename):
         master_bpm = data["master"]["bpm"]
         master_key = data["master"]["key"]
         master_scale = data["master"]["scale"]
-
-        if "master_volume" in data["master"]:
-            audio_engine.master_volume = data["master"]["master_volume"]
 
         for i in range(12):
             clear_slot(i)
