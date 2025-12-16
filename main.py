@@ -506,7 +506,7 @@ class AudioEngine:
         self.position = 0
         self.max_length = 0
         self.stream = None
-        self.master_volume = 1.
+        self.master_volume = 1.0
         self.lock = threading.Lock()
 
     def update_max_length(self):
