@@ -442,11 +442,9 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 # -------------------- classes --------------------
 
 
-class Slot(threading.Thread):
+class Slot:
     def __init__(self, idx):
-        super().__init__()
         self.idx = idx
-        self.daemon = True  # ensure thread dies when app closes
 
         # audio state
         self.empty = True
@@ -464,64 +462,41 @@ class Slot(threading.Thread):
         self.solo = False
         self.custom_color = None
 
-        # thread synchronization
-        self.start_event = threading.Event()
-        self.done_event = threading.Event()
-        self.output_buffer = None
-
-        self.req_pos = 0
-        self.req_frames = 0
-        self.req_channels = 2
-
-    def run(self):
-        while True:
-            self.start_event.wait()
-            self.start_event.clear()
-
-            self.process_audio()
-
-            self.done_event.set()
-
-    def process_audio(self):
-        # silence mega mayhem
-        self.output_buffer = np.zeros(
-            (self.req_frames, self.req_channels), dtype=np.float32
-        )
-
+    def get_audio_chunk(self, start_pos, frames, req_channels):
         if self.empty or self.stem is None:
-            return
+            return np.zeros((frames, req_channels), dtype=np.float32)
 
-        audio = self.stem.astype(np.float32)
+        audio = self.stem
         length = len(audio)
         if length == 0:
-            return
+            return np.zeros((frames, req_channels), dtype=np.float32)
 
         current_offset = (length // 2) if self.half == 1 else 0
-        offset_pos = (self.req_pos + current_offset) % length
+        read_pos = (start_pos + current_offset) % length
 
-        end = offset_pos + self.req_frames
+        end_pos = read_pos + frames
 
-        if end <= length:
-            chunk = audio[offset_pos:end]
+        if end_pos <= length:
+            chunk = audio[read_pos:end_pos]
         else:
-            wrap = end - length
-            part1 = audio[offset_pos:length]
-            part2 = audio[0:wrap]
+            wrap_amount = end_pos - length
+            part1 = audio[read_pos:length]
+            part2 = audio[0:wrap_amount]
             chunk = np.vstack((part1, part2))
 
         if chunk.ndim < 2:
             chunk = np.hstack([chunk, chunk])
 
-        if chunk.shape[0] != self.req_frames:
-            if chunk.shape[0] > self.req_frames:
-                chunk = chunk[: self.req_frames]
+        if chunk.shape[0] != frames:
+            if chunk.shape[0] > frames:
+                chunk = chunk[:frames]
             else:
-                pad = self.req_frames - chunk.shape[0]
+                pad = frames - chunk.shape[0]
                 chunk = np.vstack(
-                    (chunk, np.zeros((pad, self.req_channels), dtype=np.float32))
+                    (chunk, np.zeros((pad, req_channels), dtype=np.float32))
                 )
 
-        self.output_buffer = chunk * self.volume
+        return chunk * self.volume
 
 
 class AudioEngine:
@@ -543,35 +518,24 @@ class AudioEngine:
         if status:
             print("Audio callback status:", status)
 
-        active_lengths = [
-            len(s.stem) for s in self.slots if not s.empty and s.stem is not None
-        ]
-        self.max_length = max(active_lengths) if active_lengths else 0
+        active_slots = [s for s in self.slots if not s.empty and s.stem is not None]
 
+        if not active_slots:
+            outdata.fill(0)
+            return
+
+        self.max_length = max(len(s.stem) for s in active_slots)
         if self.max_length == 0:
             outdata.fill(0)
             return
 
         self.position %= self.max_length
 
-        for slot in self.slots:
-            slot.req_pos = self.position
-            slot.req_frames = frames
-            slot.req_channels = CHANNELS
-            slot.start_event.set()
-
-        for slot in self.slots:
-            slot.done_event.wait()
-            slot.done_event.clear()
-
         mix = np.zeros((frames, CHANNELS), dtype=np.float32)
 
-        any_solo = any(s.solo for s in self.slots if not s.empty)
+        any_solo = any(s.solo for s in active_slots)
 
-        for slot in self.slots:
-            if slot.empty:
-                continue
-
+        for slot in active_slots:
             should_play = False
             if any_solo:
                 if slot.solo:
@@ -581,11 +545,13 @@ class AudioEngine:
                     should_play = True
 
             if should_play:
-                mix += slot.output_buffer
+                slot_data = slot.get_audio_chunk(self.position, frames, CHANNELS)
+                mix += slot_data
 
         mix *= self.master_volume
 
-        outdata[:] = np.clip(mix, -1.0, 1.0)
+        # does this fix the clipping?
+        outdata[:] = np.tanh(mix)
 
         self.position += frames
         self.position %= self.max_length
@@ -603,6 +569,7 @@ class AudioEngine:
             blocksize=BUFFER_SIZE,
             dtype="float32",
             callback=self.audio_callback,
+            latency="high",
         )
         self.stream.start()
         print("Audio engine started.")
@@ -883,7 +850,6 @@ class DropdownMenu:
 slots = []
 for i in range(12):
     s = Slot(i)
-    s.start()
     slots.append(s)
 
 audio_engine = AudioEngine(slots, SAMPLE_RATE)
