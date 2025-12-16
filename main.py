@@ -506,55 +506,69 @@ class AudioEngine:
         self.position = 0
         self.max_length = 0
         self.stream = None
-        self.master_volume = 1.0
+        self.master_volume = 1.
+        self.lock = threading.Lock()
 
     def update_max_length(self):
-        lengths = [
-            len(s.stem) for s in self.slots if not s.empty and s.stem is not None
-        ]
-        self.max_length = max(lengths) if lengths else 0
+        with self.lock:
+            lengths = [
+                len(s.stem) for s in self.slots if not s.empty and s.stem is not None
+            ]
+            self.max_length = max(lengths) if lengths else 0
 
     def audio_callback(self, outdata, frames, time, status):
         if status:
             print("Audio callback status:", status)
 
-        active_slots = [s for s in self.slots if not s.empty and s.stem is not None]
-
-        if not active_slots:
+        if not self.lock.acquire(blocking=False):
             outdata.fill(0)
             return
 
-        self.max_length = max(len(s.stem) for s in active_slots)
-        if self.max_length == 0:
-            outdata.fill(0)
-            return
+        try:
+            active_slots = [s for s in self.slots if not s.empty and s.stem is not None]
 
-        self.position %= self.max_length
+            if not active_slots:
+                outdata.fill(0)
+                return
 
-        mix = np.zeros((frames, CHANNELS), dtype=np.float32)
+            self.max_length = max(len(s.stem) for s in active_slots)
+            if self.max_length == 0:
+                outdata.fill(0)
+                return
 
-        any_solo = any(s.solo for s in active_slots)
+            self.position %= self.max_length
 
-        for slot in active_slots:
-            should_play = False
-            if any_solo:
-                if slot.solo:
-                    should_play = True
+            mix = np.zeros((frames, CHANNELS), dtype=np.float32)
+
+            any_solo = any(s.solo for s in active_slots)
+
+            for slot in active_slots:
+                should_play = False
+                if any_solo:
+                    if slot.solo:
+                        should_play = True
+                else:
+                    if not slot.mute:
+                        should_play = True
+
+                if should_play:
+                    slot_data = slot.get_audio_chunk(self.position, frames, CHANNELS)
+                    mix += slot_data
+
+            mix *= self.master_volume
+
+            # does this fix the clipping?
+            outdata[:] = np.tanh(mix)
+
+            self.position += frames
+
+            if self.max_length > 0:
+                self.position %= self.max_length
             else:
-                if not slot.mute:
-                    should_play = True
+                self.position = 0
 
-            if should_play:
-                slot_data = slot.get_audio_chunk(self.position, frames, CHANNELS)
-                mix += slot_data
-
-        mix *= self.master_volume
-
-        # does this fix the clipping?
-        outdata[:] = np.tanh(mix)
-
-        self.position += frames
-        self.position %= self.max_length
+        finally:
+            self.lock.release()
 
     def restart(self):
         self.position = 0
@@ -1120,35 +1134,39 @@ def add_stem_to_slot(slot_id, song_folder, stem_type):
                     (stem_audio, np.zeros((pad, stem_audio.shape[1]), dtype=np.float32))
                 )
 
-    slot = slots[slot_id]
-    slot.empty = False
-    slot.stem = stem_audio
-    slot.song_name = os.path.basename(song_folder)
-    slot.type = stem_type
-    slot.key = stem_key
-    slot.scale = stem_scale
-    slot.bpm = stem_bpm
-    slot.offset = 0
-    slot.half = 0
-    slot.custom_color = custom_color
+    with audio_engine.lock:
+        slot = slots[slot_id]
+        slot.empty = False
+        slot.stem = stem_audio
+        slot.song_name = os.path.basename(song_folder)
+        slot.type = stem_type
+        slot.key = stem_key
+        slot.scale = stem_scale
+        slot.bpm = stem_bpm
+        slot.offset = 0
+        slot.half = 0
+        slot.custom_color = custom_color
 
     print(f"Loaded stem {stem_type}")
     audio_engine.update_max_length()
 
 
 def clear_slot(i):
-    slot = slots[i]
-    slot.empty = True
-    slot.stem = None
-    slot.song_name = None
-    slot.type = None
-    slot.volume = 1.0
-    slot.target_volume = 1.0
-    slot.offset = 0
-    slot.half = 0
-    slot.mute = False
-    slot.solo = False
-    slot.custom_color = None
+    with audio_engine.lock:
+        slot = slots[i]
+        slot.empty = True
+        slot.stem = None
+        slot.song_name = None
+        slot.type = None
+        slot.volume = 1.0
+        slot.target_volume = 1.0
+        slot.offset = 0
+        slot.half = 0
+        slot.mute = False
+        slot.solo = False
+        slot.custom_color = None
+
+    audio_engine.update_max_length()
     print(f"Slot {i} cleared.")
 
 
