@@ -94,8 +94,9 @@ You can add custom stems that DON'T follow the basic 4 stem model by putting the
 
 ### Mouse Stuff
 
+ - **Left Click (Slot):** Add a stem to the slot.
+ - **Right Click (Occupied Slot):** Clear/Unload the slot.
  - **Left Click (Slider):** Adjust volume for that slot.
- - **Right Click (Filled Circle):** Clear/Unload the slot.
  - **"M" Button:** Mute the track.
  - **"S" Button:** Solo the track (mutes all non-soloed tracks).
  - **"1/2" Button:** Shift the stem by 16 bars (swapping first/second half of the loop).
