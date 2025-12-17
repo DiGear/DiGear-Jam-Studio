@@ -77,7 +77,7 @@ Every song folder **must** contain a `meta.json` file with the song's original d
 
 ### Custom Stem Format
 
-You can add custom stems that DON'T follow the basic 4 stem model by putting them in the folder labelled `custom_stem.ogg` and `custom_stem.json`. The format is relatively similar to `meta.json`. The main difference is needing to specify the color it will have in the slot. Note that these DON'T use the same dual-mode system, and ALWAYS operates in relative mode (get around this by making 2 `.ogg` and `.json` files). It was just easier for me to code it that way lol. This code is a mess btw. Anyways enough rambling mid readme. Here's the format for custom stems:
+You can add custom stems that DON'T follow the basic 4 stem model by putting them in the folder labelled `custom_stem.ogg` and `custom_stem.json`. The format is relatively similar to `meta.json`. The main difference is needing to specify the color it will have in the slot. Note that these DON'T use the same parallel/relative system, and ALWAYS operates in relative mode (get around this by making 2 `.ogg` and `.json` files). It was just easier for me to code it that way lol. This code is a mess btw. Anyways enough rambling mid readme. Here's the format for custom stems:
 
 ```json
 {
