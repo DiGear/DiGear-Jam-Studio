@@ -1,49 +1,183 @@
 {
-    "bg_dark": [240, 242, 245],
-    "bg_light": [225, 228, 232],
-    "panel_bg": [255, 255, 255],
-    "overlay": [255, 255, 255, 180],
-
-    "popup_bg": [255, 255, 255],
-    "popup_border": [60, 140, 220],
-
-    "hover_outline": [100, 100, 100],
-
-    "text_main": [40, 44, 52],
-    "text_dim": [106, 115, 125],
-    "text_dark": [40, 44, 52],
-    "text_mode_label": [40, 160, 100],
-
-    "slot_default": [100, 100, 100],
-    "slot_empty": [220, 220, 220],
-    "slot_vocals": [255, 200, 80],
-    "slot_bass": [80, 220, 140],
-    "slot_drums": [80, 180, 240],
-    "slot_lead": [240, 100, 160],
-
-    "accent": [60, 140, 220],
-
-    "input_bg": [255, 255, 255],
-    "input_border": [200, 200, 200],
-    "input_active": [60, 140, 220],
-
-    "scrollbar": [180, 180, 180],
-
-    "slider_track": [210, 210, 210],
-    "slider_fill": [60, 140, 220],
-    "slider_knob": [255, 255, 255],
-
-    "btn_manual": [140, 80, 180],
-    "btn_save": [46, 160, 67],
-    "btn_load": [60, 140, 220],
-    "btn_ctrl": [230, 230, 230],
-    "btn_icon": [60, 60, 60],
-
-    "btn_confirm": [46, 160, 67],
-    "btn_cancel": [220, 60, 60],
-
-    "btn_mute_active": [240, 140, 40],
-    "btn_solo_active": [60, 140, 220],
-    "btn_half_active": [180, 100, 220],
-    "btn_inactive": [225, 228, 232]
+    "bg_dark": [
+        255,
+        255,
+        255
+    ],
+    "bg_light": [
+        158,
+        158,
+        158
+    ],
+    "panel_bg": [
+        255,
+        255,
+        255
+    ],
+    "overlay": [
+        0,
+        0,
+        0,
+        166
+    ],
+    "popup_bg": [
+        255,
+        255,
+        255
+    ],
+    "popup_border": [
+        70,
+        70,
+        70
+    ],
+    "hover_outline": [
+        200,
+        200,
+        200
+    ],
+    "text_main": [
+        255,
+        255,
+        255
+    ],
+    "text_dim": [
+        180,
+        180,
+        180
+    ],
+    "text_dark": [
+        20,
+        20,
+        20
+    ],
+    "text_mode_label": [
+        160,
+        210,
+        160
+    ],
+    "slot_default": [
+        255,
+        255,
+        255
+    ],
+    "slot_empty": [
+        128,
+        128,
+        128
+    ],
+    "slot_vocals": [
+        255,
+        200,
+        80
+    ],
+    "slot_bass": [
+        80,
+        220,
+        140
+    ],
+    "slot_drums": [
+        80,
+        180,
+        240
+    ],
+    "slot_lead": [
+        240,
+        100,
+        160
+    ],
+    "accent": [
+        60,
+        140,
+        220
+    ],
+    "input_bg": [
+        166,
+        166,
+        166
+    ],
+    "input_border": [
+        70,
+        70,
+        70
+    ],
+    "input_active": [
+        60,
+        140,
+        220
+    ],
+    "scrollbar": [
+        128,
+        128,
+        128
+    ],
+    "slider_track": [
+        170,
+        170,
+        170
+    ],
+    "slider_fill": [
+        60,
+        140,
+        220
+    ],
+    "slider_knob": [
+        240,
+        240,
+        240
+    ],
+    "btn_manual": [
+        140,
+        80,
+        180
+    ],
+    "btn_save": [
+        50,
+        160,
+        80
+    ],
+    "btn_load": [
+        60,
+        140,
+        220
+    ],
+    "btn_ctrl": [
+        255,
+        96,
+        64
+    ],
+    "btn_icon": [
+        255,
+        255,
+        255
+    ],
+    "btn_confirm": [
+        50,
+        160,
+        80
+    ],
+    "btn_cancel": [
+        255,
+        55,
+        49
+    ],
+    "btn_mute_active": [
+        220,
+        140,
+        40
+    ],
+    "btn_solo_active": [
+        60,
+        140,
+        220
+    ],
+    "btn_half_active": [
+        200,
+        80,
+        200
+    ],
+    "btn_inactive": [
+        128,
+        128,
+        128
+    ]
 }
