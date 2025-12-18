@@ -1080,7 +1080,9 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
                 master_key = stem_key
                 master_scale = stem_scale
                 if show_progress:
-                    tqdm.write(f"Master tuning set from custom stem to {master_key} {master_scale}.")
+                    tqdm.write(
+                        f"Master tuning set from custom stem to {master_key} {master_scale}."
+                    )
 
             pbar.update(1)
 
@@ -1594,23 +1596,31 @@ while running:
         dist = (mx - cx) ** 2 + (my - cy) ** 2
         is_hovered = dist <= CIRCLE_RADIUS**2 and not input_blocked
 
+        should_pulse = False
+
         if slot.empty:
             color = circle_color_empty
             outline_color = darken_color(color)
         else:
             if slot.custom_color:
-                color = slot.custom_color
+                base_color = slot.custom_color
             else:
-                color = stem_colors.get(slot.type, circle_color_default)
+                base_color = stem_colors.get(slot.type, circle_color_default)
 
-            should_pulse = False
-
-            if master_bpm:
-                if any_solo_visual:
-                    if slot.solo:
-                        should_pulse = True
-                elif not slot.mute:
-                    should_pulse = True
+            if any_solo_visual:
+                if slot.solo:
+                    color = base_color
+                    should_pulse = True if master_bpm else False
+                else:
+                    color = darken_color(base_color, 0.3)
+                    should_pulse = False
+            else:
+                if slot.mute:
+                    color = darken_color(base_color, 0.5)
+                    should_pulse = False
+                else:
+                    color = base_color
+                    should_pulse = True if master_bpm else False
 
             if should_pulse:
                 base_outline = darken_color(color)
