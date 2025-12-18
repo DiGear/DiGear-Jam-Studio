@@ -47,6 +47,9 @@ SONG_FOLDERS = ["Songs", "Stock Songs"]
 if not os.path.exists("projects"):
     os.makedirs("projects")
 
+if not os.path.exists("exports"):
+    os.makedirs("exports")
+
 # ----------- part of the pygame stuff -----------
 
 pygame.init()
@@ -2280,7 +2283,7 @@ while running:
 
                 now = datetime.datetime.now()
                 timestamp = now.isoformat()[:19].replace(":", "-")
-                filename = f"jam_{timestamp}.wav"
+                filename = os.path.join("exports", f"jam_{timestamp}.wav")
 
                 export_mix_to_wav(filename)
                 continue
