@@ -187,3 +187,5 @@ config.json
 *.wav
 themes/gamer.json
 /projects
+*.kate-swp
+main.py.old
