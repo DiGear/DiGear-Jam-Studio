@@ -1274,8 +1274,10 @@ def load_project(filename):
     wait_rect = pygame.Rect(
         (SCREEN_W - wait_w) // 2, (SCREEN_H - wait_h) // 2, wait_w, wait_h
     )
-    pygame.draw.rect(screen, palette["popup_bg"], wait_rect)
-    pygame.draw.rect(screen, palette["popup_border"], wait_rect, 3)
+
+    pygame.draw.rect(screen, palette["input_bg"], wait_rect)
+    pygame.draw.rect(screen, palette["input_border"], wait_rect, 2)
+
     draw_text_centered(
         "Loading Project...", FONT_LARGE, palette["text_main"], wait_rect
     )
@@ -1848,19 +1850,20 @@ while running:
 
     if saving_mode:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
+        overlay.fill(palette["overlay"])
         screen.blit(overlay, (0, 0))
 
         box_rect = pygame.Rect((SCREEN_W - 400) // 2, (SCREEN_H - 250) // 2, 400, 250)
 
-        pygame.draw.rect(screen, palette["panel_bg"], box_rect)
-        pygame.draw.rect(screen, palette["accent"], box_rect, 2)
+        pygame.draw.rect(screen, palette["input_bg"], box_rect)
+        pygame.draw.rect(screen, palette["input_border"], box_rect, 2)
 
+        title_rect = pygame.Rect(box_rect.x, box_rect.y + 25, 400, 40)
         draw_text_centered(
             "Save Project As...",
             FONT_LARGE,
             palette["text_main"],
-            pygame.Rect(box_rect.x, box_rect.y + 20, 400, 40),
+            title_rect,
         )
 
         save_input.rect.center = box_rect.center
@@ -1897,18 +1900,20 @@ while running:
 
     if loading_mode:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
+        overlay.fill(palette["overlay"])
         screen.blit(overlay, (0, 0))
 
         box_rect = pygame.Rect((SCREEN_W - 400) // 2, (SCREEN_H - 300) // 2, 400, 300)
-        pygame.draw.rect(screen, palette["panel_bg"], box_rect)
-        pygame.draw.rect(screen, palette["btn_load"], box_rect, 2)
 
+        pygame.draw.rect(screen, palette["input_bg"], box_rect)
+        pygame.draw.rect(screen, palette["input_border"], box_rect, 2)
+
+        title_rect = pygame.Rect(box_rect.x, box_rect.y + 25, 400, 40)
         draw_text_centered(
             "Select File to Load",
             FONT_LARGE,
             palette["text_main"],
-            pygame.Rect(box_rect.x, box_rect.y + 20, 400, 40),
+            title_rect,
         )
 
         if dropdown_load_project:
