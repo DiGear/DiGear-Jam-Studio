@@ -541,11 +541,9 @@ class AudioEngine:
 
             mix = np.zeros((frames, CHANNELS), dtype=np.float32)
 
-            any_solo = any(s.solo for s in active_slots)
-
             for slot in active_slots:
                 should_play = False
-                if any_solo:
+                if any(s.solo for s in active_slots):
                     if slot.solo:
                         should_play = True
                 else:
@@ -556,10 +554,13 @@ class AudioEngine:
                     slot_data = slot.get_audio_chunk(self.position, frames, CHANNELS)
                     mix += slot_data
 
-            mix *= self.master_volume
+            # lower volume based on number of active slots
+            strength = 0.8
+            mix *= self.master_volume * (1 - strength * (1 - 1 / len(active_slots)))
 
-            # does this fix the clipping?
-            outdata[:] = np.tanh(mix)
+            # adjustable soft clipping
+            ratio = 0.8
+            outdata[:] = np.clip(np.where(mix <= ratio, mix, 1 - (1 - ratio) * np.exp((ratio - mix) / (1 - ratio))), -1, 1)
 
             self.position += frames
 
@@ -1169,7 +1170,7 @@ def clear_slot(i):
 
 def shift_slot(i):
     slot = slots[i]
-    slot.half = 1 if slot.half == 0 else 0
+    slot.half = 1 - slot.half
 
 
 def toggle_master_playback():
