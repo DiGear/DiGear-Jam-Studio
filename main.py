@@ -665,6 +665,10 @@ class DropdownMenu:
         self.item_height = h
         self.scrollbar_width = 15
 
+        self.dragging_scrollbar = False
+        self.drag_start_mouse_y = 0
+        self.drag_start_scroll_y = 0
+
     def get_selected(self):
         if not self.options:
             return None
@@ -677,6 +681,7 @@ class DropdownMenu:
         if self.index >= len(self.options):
             self.index = 0
         self.scroll_y = 0
+        self.dragging_scrollbar = False
 
     def draw(self, screen):
         self.bg_color = palette["input_bg"]
@@ -736,8 +741,10 @@ class DropdownMenu:
                     self.item_height,
                 )
 
-                is_hovered = opt_rect.collidepoint(mx, my) and list_rect.collidepoint(
-                    mx, my
+                is_hovered = (
+                    opt_rect.collidepoint(mx, my)
+                    and list_rect.collidepoint(mx, my)
+                    and not self.dragging_scrollbar
                 )
 
                 color = current_hover if is_hovered else current_active
@@ -780,14 +787,41 @@ class DropdownMenu:
                     self.scrollbar_width - 4,
                     thumb_h,
                 )
-                pygame.draw.rect(
-                    screen, palette["scrollbar"], sb_thumb_rect, border_radius=4
+
+                sb_color = (
+                    palette["slider_fill"]
+                    if self.dragging_scrollbar
+                    else palette["scrollbar"]
                 )
+                pygame.draw.rect(screen, sb_color, sb_thumb_rect, border_radius=4)
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEWHEEL:
-            mx, my = pygame.mouse.get_pos()
+        mx, my = pygame.mouse.get_pos()
 
+        if event.type == pygame.MOUSEMOTION:
+            if self.dragging_scrollbar and self.is_open:
+                num_items = len(self.options)
+                total_height = num_items * self.item_height
+                display_count = min(num_items, self.max_display_items)
+                display_height = display_count * self.item_height
+                max_scroll = max(0, total_height - display_height)
+
+                if max_scroll > 0:
+                    ratio = display_height / total_height
+                    thumb_h = max(20, display_height * ratio)
+                    track_len = display_height - thumb_h
+                    delta_y = my - self.drag_start_mouse_y
+                    delta_scroll = (delta_y / track_len) * max_scroll
+                    self.scroll_y = self.drag_start_scroll_y + delta_scroll
+                    self.scroll_y = max(0, min(self.scroll_y, max_scroll))
+                return True
+
+        if event.type == pygame.MOUSEBUTTONUP:
+            if self.dragging_scrollbar:
+                self.dragging_scrollbar = False
+                return True
+
+        if event.type == pygame.MOUSEWHEEL:
             if self.is_open and self.options:
                 display_height = (
                     min(len(self.options), self.max_display_items) * self.item_height
@@ -805,11 +839,7 @@ class DropdownMenu:
 
                     scroll_speed = 20
                     self.scroll_y -= event.y * scroll_speed
-
-                    if self.scroll_y < 0:
-                        self.scroll_y = 0
-                    if self.scroll_y > max_scroll:
-                        self.scroll_y = max_scroll
+                    self.scroll_y = max(0, min(self.scroll_y, max_scroll))
                     return True
 
             elif not self.is_open and self.rect.collidepoint(mx, my):
@@ -823,12 +853,12 @@ class DropdownMenu:
                     return True
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
-
             if self.is_open and self.options:
-                display_height = (
-                    min(len(self.options), self.max_display_items) * self.item_height
-                )
+                num_items = len(self.options)
+                total_height = num_items * self.item_height
+                display_count = min(num_items, self.max_display_items)
+                display_height = display_count * self.item_height
+
                 list_rect = pygame.Rect(
                     self.rect.x,
                     self.rect.y + self.rect.height,
@@ -837,7 +867,31 @@ class DropdownMenu:
                 )
 
                 if list_rect.collidepoint(mx, my):
-                    if mx > self.rect.right - self.scrollbar_width:
+                    if (
+                        total_height > display_height
+                        and mx > self.rect.right - self.scrollbar_width
+                    ):
+                        ratio = display_height / total_height
+                        thumb_h = max(20, display_height * ratio)
+                        max_scroll = total_height - display_height
+                        scroll_ratio = self.scroll_y / max_scroll
+                        thumb_y = list_rect.y + scroll_ratio * (
+                            display_height - thumb_h
+                        )
+
+                        sb_thumb_rect = pygame.Rect(
+                            self.rect.right - self.scrollbar_width,
+                            thumb_y,
+                            self.scrollbar_width,
+                            thumb_h,
+                        )
+
+                        if sb_thumb_rect.collidepoint(mx, my):
+                            self.dragging_scrollbar = True
+                            self.drag_start_mouse_y = my
+                            self.drag_start_scroll_y = self.scroll_y
+                        else:
+                            pass
                         return True
 
                     relative_y = my - list_rect.y + self.scroll_y
@@ -852,6 +906,7 @@ class DropdownMenu:
                     mx, my
                 ):
                     self.is_open = False
+                    self.dragging_scrollbar = False
 
             if self.rect.collidepoint(mx, my):
                 self.is_open = not self.is_open
