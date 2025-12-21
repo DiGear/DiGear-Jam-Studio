@@ -12,8 +12,9 @@ import soundfile as sf
 
 from tqdm import tqdm
 
-# -------------------- this shit is vaguely related --------------------
+# -------------------- constants --------------------
 
+# map the notes to integers for pitch calulating later
 KEY_TO_INT = {
     "C": 0,
     "C#": 1,
@@ -34,6 +35,7 @@ KEY_TO_INT = {
     "B": 11,
 }
 
+# this is what the ui displays
 KEYS_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 KEYS_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
@@ -44,13 +46,14 @@ BUFFER_SIZE = 2048
 CHANNELS = 2
 SONG_FOLDERS = ["Songs", "Stock Songs"]
 
+# make sure these exist they're important'
 if not os.path.exists("projects"):
     os.makedirs("projects")
 
 if not os.path.exists("exports"):
     os.makedirs("exports")
 
-# ----------- part of the pygame stuff -----------
+# -------------------- pylame --------------------
 
 pygame.init()
 
@@ -61,7 +64,6 @@ screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
 
 pygame.display.set_caption("DiGear Jam Studio")
 
-# ensure themes folder exists
 if not os.path.exists("themes"):
     os.makedirs("themes")
 
@@ -71,13 +73,9 @@ try:
 except:
     pass
 
-# ---------- theme shit ----------
+# -------------------- themes --------------------
 
-# these are the same values used in the "default.json" this is just fallback shit
-# ALSO PEP 8 makes this unclear if it should be caps or not
-# but it looks better lowercased
-
-# if i didnt put a comment i thought it was self explanatory enough
+# fallback palette (same as default.json)
 palette = {
     "bg_dark": (18, 18, 18),  # main background
     "bg_light": (45, 45, 45),  # grid lines
@@ -117,6 +115,7 @@ palette = {
     "btn_inactive": (50, 50, 50),
 }
 
+# initialize graphics
 circle_color_empty = None
 circle_color_default = None
 stem_colors = {}
@@ -125,13 +124,12 @@ slider_color = None
 slider_fill = None
 slider_tip = None
 
-# i dont fucking know if PEP 8 specifies this to be capitalized or not
-# im making it capitalized since its like a global config thing even though its NOT a constant
+# font confug
 FONT_SETTINGS = [
     "Arial",  # default font
-    20,
-    22,
-    28,
+    20,  # small size
+    22,  # medium size
+    28,  # large size
 ]
 
 FONT_SMALL = None
@@ -140,7 +138,10 @@ FONT_LARGE = None
 
 current_theme_name = "default"
 
+# -------------------- config management --------------------
 
+
+# save config to json
 def save_config():
     config = {
         "theme": current_theme_name,
@@ -156,6 +157,7 @@ def save_config():
         print(f"Error saving config: {e}")
 
 
+# reinit the fonts
 def update_fonts(font_name=None):
     global FONT_SMALL, FONT_MEDIUM, FONT_LARGE, FONT_SETTINGS
     if font_name:
@@ -166,11 +168,13 @@ def update_fonts(font_name=None):
         FONT_MEDIUM = pygame.font.SysFont(FONT_SETTINGS[0], FONT_SETTINGS[2])
         FONT_LARGE = pygame.font.SysFont(FONT_SETTINGS[0], FONT_SETTINGS[3])
     except:
+        # fallback
         FONT_SMALL = pygame.font.SysFont("Arial", FONT_SETTINGS[1])
         FONT_MEDIUM = pygame.font.SysFont("Arial", FONT_SETTINGS[2])
         FONT_LARGE = pygame.font.SysFont("Arial", FONT_SETTINGS[3])
 
 
+# map the variables from earlier to the palette
 def update_graphics_constants():
     global circle_color_empty, circle_color_default, stem_colors, text_color
     global slider_color, slider_fill, slider_tip
@@ -191,6 +195,7 @@ def update_graphics_constants():
     slider_tip = palette["slider_knob"]
 
 
+# loads a themes json and updates the palette
 def load_theme(theme_name):
     global current_theme_name
     path = os.path.join("themes", theme_name + ".json")
@@ -219,7 +224,7 @@ SLIDER_W = 120
 SLIDER_H = 10
 CIRCLE_RADIUS = 60
 
-# -------------------- most of the functions are here --------------------
+# -------------------- functions --------------------
 
 
 def draw_text_centered(text, font, color, target_rect):
@@ -228,6 +233,7 @@ def draw_text_centered(text, font, color, target_rect):
     screen.blit(surf, text_rect)
 
 
+# this converts keys to the perfered notation
 def get_display_key(key_str):
     if not key_str:
         return "???"
@@ -235,8 +241,8 @@ def get_display_key(key_str):
     return KEYS_FLAT[idx] if use_flat_notation else KEYS_SHARP[idx]
 
 
+# calculate the shortest semitone distance
 def key_shift_semitones(target_key, source_key):
-    # calc semitone diff
     raw = KEY_TO_INT[target_key] - KEY_TO_INT[source_key]
     if raw > 6:
         raw -= 12
@@ -245,19 +251,19 @@ def key_shift_semitones(target_key, source_key):
     return raw
 
 
+# find the best bpm multiplier for mixing half or double time
 def match_bpm_timescale(original_bpm, master_bpm):
-    # find best bpm match
     candidates = [
         original_bpm * 0.25,
         original_bpm * 0.5,  # half time
-        original_bpm,  # og
+        original_bpm,
         original_bpm * 2,  # double time
         original_bpm * 4,
     ]
     return min(candidates, key=lambda b: abs(b - master_bpm))
 
 
-def darken_color(color, factor=0.6):  # one less hard-coded thing
+def darken_color(color, factor=0.6):
     r, g, b = color
     return (int(r * factor), int(g * factor), int(b * factor))
 
@@ -271,6 +277,7 @@ def lighten_color(color, factor=1.5):
     )
 
 
+# i like only use this for the pulse
 def lerp_color(c1, c2, t):
     return (
         int(c1[0] + (c2[0] - c1[0]) * t),
@@ -282,20 +289,25 @@ def lerp_color(c1, c2, t):
 def load_audio_data(path):
     audio, sr = sf.read(path, dtype="float32")
     if audio.ndim == 1:
+        # turn mono into stereo
         audio = np.stack([audio, audio], axis=1)
     if sr != SAMPLE_RATE:
         print(f"Warning: samplerate mismatch in: {path}")
+
+    # normalize
     peak = np.max(np.abs(audio))
     if peak:
         audio /= peak
     return audio
 
 
+# scan the song folders for stems
 def get_stem_types(song_path):
     found_stems = ["vocals", "bass", "drums", "lead"]
 
     if os.path.exists(song_path):
         for f in os.listdir(song_path):
+            # custom stem shit
             if f.endswith(".json") and f != "meta.json":
                 stem_name = f.replace(".json", "")
                 if os.path.exists(os.path.join(song_path, stem_name + ".ogg")):
@@ -304,14 +316,17 @@ def get_stem_types(song_path):
     return found_stems
 
 
+# volume slider
 def draw_slider(x, y, w, h, value):
     track_outline_col = darken_color(slider_color, factor=0.4)
     knob_outline_col = darken_color(slider_tip, factor=0.4)
+
     pygame.draw.rect(screen, slider_color, (x, y, w, h))
     filled = int(w * value)
     if filled > 0:
         pygame.draw.rect(screen, slider_fill, (x, y, filled, h))
     pygame.draw.rect(screen, track_outline_col, (x, y, w, h), 2)
+
     knob_x = x + filled
     knob_y = y + h // 2
     knob_radius = h // 2 + 2
@@ -341,7 +356,7 @@ def draw_half_offset(surface, x, y, active, hovered):
     surface.blit(txt, txt_rect)
 
 
-# we use this like 5 places why was it not already a helper function
+# this is used for pause and play and shit
 def draw_action_button(surface, text, rect, base_color, mx, my, font=None):
     if font is None:
         font = FONT_LARGE
@@ -352,17 +367,10 @@ def draw_action_button(surface, text, rect, base_color, mx, my, font=None):
         draw_color = base_color
 
     pygame.draw.rect(surface, draw_color, rect, border_radius=4)
-
     border_col = darken_color(base_color, 0.8)
     pygame.draw.rect(surface, border_col, rect, 2, border_radius=4)
 
-    # this determines if it should be dark or not based on the color of the action buttons on the current theme
-    # not ENTIRELY sure if this is overengineered bullshit but i was getting annoyed making the themes
-
-    # honestly it looks kind of fucking stupid but its the best i could think of at 5 am
-
-    # actually on the gameboy theme it looks cool as fuck
-
+    # calculate brightness to figure out if tje button text should be black or white
     r, g, b = base_color
     brightness = r * 0.299 + g * 0.587 + b * 0.114
 
@@ -380,7 +388,6 @@ def draw_mute_solo(surface, x, y, muted, soloed, mx, my):
 
     # mute Button
     r_mute = pygame.Rect(x, y, btn_size, btn_size)
-
     mute_base = palette["btn_mute_active"] if muted else palette["btn_inactive"]
 
     if r_mute.collidepoint(mx, my):
@@ -396,7 +403,6 @@ def draw_mute_solo(surface, x, y, muted, soloed, mx, my):
 
     # solo Button
     r_solo = pygame.Rect(x + btn_size + gap, y, btn_size, btn_size)
-
     solo_base = palette["btn_solo_active"] if soloed else palette["btn_inactive"]
 
     if r_solo.collidepoint(mx, my):
@@ -413,8 +419,8 @@ def draw_mute_solo(surface, x, y, muted, soloed, mx, my):
     return r_mute, r_solo
 
 
+# this text scales itself down to fit within its max_width
 def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color):
-    # draws text with outline and scales if too big
     if not text:
         return
 
@@ -433,7 +439,7 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 
     rect = text_surf.get_rect(center=(center_x, center_y))
 
-    # draw outline
+    # outline
     offsets = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
     for dx, dy in offsets:
         surface.blit(outline_surf, (rect.x + dx, rect.y + dy))
@@ -446,8 +452,6 @@ def draw_dynamic_text(surface, text, font, center_x, center_y, max_width, color)
 class Slot:
     def __init__(self, idx):
         self.idx = idx
-
-        # audio state
         self.empty = True
         self.stem = None
         self.song_name = None
@@ -456,7 +460,7 @@ class Slot:
         self.scale = None
         self.bpm = None
         self.volume = 1.0
-        self.target_volume = 1.0
+        self.target_volume = 1.0  # this is used to make the volume slider smooth
         self.offset = 0
         self.half = 0
         self.mute = False
@@ -472,6 +476,7 @@ class Slot:
         if length == 0:
             return np.zeros((frames, req_channels), dtype=np.float32)
 
+        # 1/2 button shit
         current_offset = (length // 2) if self.half == 1 else 0
         read_pos = (start_pos + current_offset) % length
 
@@ -510,6 +515,7 @@ class AudioEngine:
         self.master_volume = 1.0
         self.lock = threading.Lock()
 
+    # this uses the longest stem to find the loop length
     def update_max_length(self):
         with self.lock:
             lengths = [
@@ -517,6 +523,7 @@ class AudioEngine:
             ]
             self.max_length = max(lengths) if lengths else 0
 
+    # this does the mixing, volumes, and then handles clipping (badly)
     def audio_callback(self, outdata, frames, time, status):
         if status:
             print("Audio callback status:", status)
@@ -558,9 +565,8 @@ class AudioEngine:
             strength = 0.8
             mix *= self.master_volume * (1 - strength * (1 - 1 / len(active_slots)))
 
-            # adjustable soft clipping
-            ratio = 0.8
-            outdata[:] = np.clip(np.where(mix <= ratio, mix, 1 - (1 - ratio) * np.exp((ratio - mix) / (1 - ratio))), -1, 1)
+            # theres probably better ways to handle this
+            outdata[:] = np.tanh(mix)
 
             self.position += frames
 
@@ -595,16 +601,6 @@ class AudioEngine:
             self.stream.stop()
             self.stream.close()
             print("Audio engine stopped.")
-
-
-# -------------------- the rest of the pygame bullshit, did you know i hate pygame? --------------------
-# this pygame shit sucks so much we shoulda used something else man idk
-# pyqt6?? some tkinter shit???
-# ALSO PYGAME HAS A UI LIBRARY I COULD HAVE DOWNLOADED FUCKKKKK
-# dude what is arcade
-# dear pygui what am i writing a letter
-# yeah like in hindsight it was dumb to not use a library for UI but its also kind of cool (and a miracle) that 50% of this apps code is just for drawing buttons and dropdowns and it WORKS
-# might as well not swap it out at this point and like im not really sure im gonna be adding that much more UI stuff anyways so its fine????
 
 
 class TextInput:
@@ -666,6 +662,10 @@ class DropdownMenu:
         self.item_height = h
         self.scrollbar_width = 15
 
+        self.dragging_scrollbar = False
+        self.drag_start_mouse_y = 0T̸̛̛̥͎͈̞̖̗͓̦̥͙̝͛͊̀̓̅̍̋̌̒̄͒̍̅͑̈́̓͂̃̂̃̂̿̎̃́̒̓̆̀̚͘͠͝͝͠͠͝ͅͅḥ̷̨̧̧̨̧̡͉͓̣̗̣̹͍͓̳̖̻͕̝̫̰̮̥͍̤͕͍̙͎͇͉̬͉̬̯̟̮̗̣͈̫̭͙͍́̀̋͆̉́̅͊͑̈́̇̉̎͘͘͝ͅͅi̷̹̜̬̱̣̼͖̯̖͖̪͚͓̤͒͊̐̅͆̎̾̍͗͆͆͑̋̎̊͊̇̈́̈̇͊̓̿͒̐̉͋̓̾̋͐̀̓̊͋̒͘͝͠͝͠͝͠͠ͅs̶̛̺̐͛͐̊̆͑̈́̈́͒̿̈̈́͑̌̍̂͒̑̔̓̉́͆̂͂͐͆̍̇̒̆̏̾͐̏̓̋͘͘͝͠͝ ̷̡̛̤̬͍͎̬̞͓͖͉͍̺̺̣̖̹̦̙̪̺̻͔̜̯̗̬͚̭̮͖͇̳̳̩̹̻̟̫̺̖̼̗͆͛͐̓̑͜͠ͅi̵̧̧͇̮̳̼̯̯͖͉͇̲̬̥͔͇͇̪̼̯͕̥͇̜͈͎͇̻̓̍͊̆̂͋̈́̃̇̉̉͑̈́̚͠͝s̵̖̤̥̮̝͖̠͚̖̓̊͌̏̆̋̽͋̓̈́̈́̾̍̉̂͗͑̈̈́̊́͐̆̏̏͊̈́͐̕̕͜͠͝ ̷̛͎̬̤̯̖͉̥̞̙͙̪̝͖̼͔̹̙͂͆͐̐͐̎̿̒̏̈́̒̈́́̑̍̃̆̐͒̆̄͂͐͒̕̚͠͠͠t̶̡̢̞̯̞̳̬̭͙̣͚̲̰̹͓͎̗̗̥̳̩̱͎̳̠̳͕̭͉̙̩͍͉̳̞͓̮͖̳̟̰͇̘̘̬̹̫̓͛̾̂̀̉͜ͅͅḩ̸̧̛̖̤̝̥͕̦̩͔͇͇̩͎͍̩̲͚͍̹̙̣̈́̒̓́̓̈́́̂̂͛͘͜e̵̛͕͕͕̫͈̥̥̤̰͆͆͊͑̊̋́͋̆̌͊̽͌͌̒̒̽̏̎̑̅̒̓̈̀̐̀̓͆̏̒̀̂̓͑̏̇̒̀̂̔̅̚͝͠͠͠͠͠ͅ ̷̨̛̺̺͔̭̦̮̗͎͍̥̜̺̠̮̮̦̤͚̬̫͖͎̘̗̖̖̱̮̭̼̯̖̣̳̗͙̫̮̉́̀̄̔̑͛̾̈́̃́̈́̉̈͜͝ͅͅz̵̧̧͎̺͓͍̙̥̤̩͕̯̬̦̮͖͉̦̺̭̳̬͚͙͇̻̬̼̣͇͒̈͂̓̽̒̒̉͐́͌͊͐͌̕ą̵͎̱̻̰͙̪̘̟͓̺̫͇̬̝̓̊͆̍͂̽̆̽́̅̐̾͋̃̉͘ͅḽ̵̨̢̠̯͈͎͖͇̖̬̜̪̖̳͈̺̬̞̦̲̲̥̥͙͚̤͖̯̙̘͎̥͎̰͉̖̠͙̦̮̩̓͂̑͛̓̎͌̽́͌̐̈́̈́̆͋͜͠͝g̷̘̤̾̔o̷̺̤̠̰̱̍͑̃͆̎̔͒̂̔̀͊́͋̎̾́̃̃̽̍̅̊̈͒͠ ̸̧̢̡̧͉̣̠̲͙͓̝̳͉̖̖̺͓̬̻̤̦͓̝͉̱̲̦̪̹͚̲̗̇̀͛̓̅̃̔̈́̒̏̔̉̊̽̍̀̈́́̇̀̕̚̕͜͝͝͝͝ͅṯ̸̨̡̺̥̦͓̺̤̬̺͈̺̰̳̟̖͇̜̻̘̜͇̖͉͉͉̘̮̹͍̘̼̬̣̥̪̗̬̰̻͋͆́̃͌̓̆̄̂̽̉̓͋́̒̇͋̍̄̒͐̇̈͂͐̎̆́̐̒́͊̓̽̀͊̇̓̈́͝ͅͅͅḛ̶̡̧̢̛̼̬̯̟͔͙̝̪̭̳̜̥̪̤̥͕̖̦̥̗͈̟̩̲͚̎̽̉̉̄̀̈́͆̈̈͐̊͆͌̐̈́̔̽̓̽̓̿́̍͛̇̀̊̚̚͜͜͝͝͝x̶̛̲̓̋̂͗̉̽́̇͠͝ț̷̨̨͙̞̼̠̜̖͈̱̻̖͎͖̣͙̲̰̜͙̟̯̫̹̞̙̟̦̖̞̝̩͇̹͍̠̮͇̫͌̓̑͛̒̈́̓̿̓̇̀̾́͐̇̊̔͊̓͐͘ ̵̨̡̛̖̰̲̘̘̲̳̹̭͓͈̼̫̞̰̜͇͈̭͔̺̝̝̥̜͍͇͔̮͛̇̀͛͛̆̐̒̇̓͌̒̔̄̐̅̓͂̏̓̈́̀̄́̾̒͆̀͗̈̚̕̚͠͝͝͝g̶̡̡̡̟̫͈̻͇̮̱̤̰̞̱̳̳̮̥̲̱̺̫̗̲̣͎̝̱̫̤̗̲̯̦̹̘̫̏̀̑̈́̏̓̌͛͜͜͜͝ȩ̸̢̢̧̛̛̘͇̲͙͓̳̘͈͕̣̫̝̲̦̜̪̩̦̞̬̠̤͕̬̬̼̄͂͆̓̾̿͊͒̔́̌̓͋͗̌̽̀͑̇̐̒̅͛̔͆̑̈̄̎͌̍̈̍͛́͋͑̕͘̕͝͝͝͠n̷̹͇̞̗̝͔̙̬͚̰̫̱͍͔̜̙͊̈́̆̓̊̈́̇̊͆̈́̋̈͆̌͆͛̿̿̾͆͒͑͂̿̃̔͐̿͐͒̍͆̃̽̅̽́̀̆̄͌̿̕͘̕͘͝͝e̷̢̨̢̡̹͈͔̲̣̖̪̫͔̦̬̠̭̲̠͕̟͒̂͊͐̾̐̍̿̉͛͊̉̈́̅̾͌͊̂͆̅̈̌̓͑̓͊̅͊̕̕͜͝ͅṟ̶̨̨̢̧͓͚̹̗̜̭͍̹̥̼̭̠̩̜̥͚͖̼͕͈̙̻̻̫͔̙͎̦̟̺̰͋̔̌̆̿͆͗̒́̉͆̀́̿̑̐͛̉̈̀̕̚͘͘̕̕͜͜͜a̸̢̞̭̭̣̙̥̤̝̤͍̺̔̒͑̉̂́̉̄̂͑̓̋̈́̾́̓͂͑͂̽̍̾͘͠͝ţ̵̨̨̘͉̙͈̣̗̩̙̠̖̖̣̻̯̣͉̳̭͕̗̤͔͕͓̗͎͔̎̐̀̈̋͑͘ͅȯ̵̢̨̨͕̞̲͔̞̮̺̪̟͖̦̺̤̗̘̖͔̪͔̼̘̘̤̲͎͖̹̤͇͓͇̽͂̇̂͊̀̊͂̋͐̿͆͋̀̀̆͒̀́͘̚͜͝ͅr̷̛̛̛̛̠̞̫̒̃͗̃̈̓͗̒̊̂̄̊̍́́͒͛̾̍̂͒̀̓̐̈́̆̍̐̄̃̎͘͘̕͜͝͝.̶̨̧̧̨̖̞̰̳̺͔͕̦̞̠̰̫̗̯̺̞͕̻̖̙̟̞̭̹͎̖̝͖̝̰͇̞̻̥͖̳̖̣͓̯̭̩͈͆̊̄̊̀̉̑͠͝ͅͅ
+        self.drag_start_scroll_y = 0
+
     def get_selected(self):
         if not self.options:
             return None
@@ -678,6 +678,7 @@ class DropdownMenu:
         if self.index >= len(self.options):
             self.index = 0
         self.scroll_y = 0
+        self.dragging_scrollbar = False
 
     def draw(self, screen):
         self.bg_color = palette["input_bg"]
@@ -686,13 +687,12 @@ class DropdownMenu:
 
         pygame.draw.rect(screen, self.bg_color, self.rect)
         pygame.draw.rect(screen, self.border_color, self.rect, 2)
-
+T̸̛̛̥͎͈̞̖̗͓̦̥͙̝͛͊̀̓̅̍̋̌̒̄͒̍̅͑̈́̓͂̃̂̃̂̿̎̃́̒̓̆̀̚͘͠͝͝͠͠͝ͅͅḥ̷̨̧̧̨̧̡͉͓̣̗̣̹͍͓̳̖̻͕̝̫̰̮̥͍̤͕͍̙͎͇͉̬͉̬̯̟̮̗̣͈̫̭͙͍́̀̋͆̉́̅͊͑̈́̇̉̎͘͘͝ͅͅi̷̹̜̬̱̣̼͖̯̖͖̪͚͓̤͒͊̐̅͆̎̾̍͗͆͆͑̋̎̊͊̇̈́̈̇͊̓̿͒̐̉͋̓̾̋͐̀̓̊͋̒͘͝͠͝͠͝͠͠ͅs̶̛̺̐͛͐̊̆͑̈́̈́͒̿̈̈́͑̌̍̂͒̑̔̓̉́͆̂͂͐͆̍̇̒̆̏̾͐̏̓̋͘͘͝͠͝ ̷̡̛̤̬͍͎̬̞͓͖͉͍̺̺̣̖̹̦̙̪̺̻͔̜̯̗̬͚̭̮͖͇̳̳̩̹̻̟̫̺̖̼̗͆͛͐̓̑͜͠ͅi̵̧̧͇̮̳̼̯̯͖͉͇̲̬̥͔͇͇̪̼̯͕̥͇̜͈͎͇̻̓̍͊̆̂͋̈́̃̇̉̉͑̈́̚͠͝s̵̖̤̥̮̝͖̠͚̖̓̊͌̏̆̋̽͋̓̈́̈́̾̍̉̂͗͑̈̈́̊́͐̆̏̏͊̈́͐̕̕͜͠͝ ̷̛͎̬̤̯̖͉̥̞̙͙̪̝͖̼͔̹̙͂͆͐̐͐̎̿̒̏̈́̒̈́́̑̍̃̆̐͒̆̄͂͐͒̕̚͠͠͠t̶̡̢̞̯̞̳̬̭͙̣͚̲̰̹͓͎̗̗̥̳̩̱͎̳̠̳͕̭͉̙̩͍͉̳̞͓̮͖̳̟̰͇̘̘̬̹̫̓͛̾̂̀̉͜ͅͅḩ̸̧̛̖̤̝̥͕̦̩͔͇͇̩͎͍̩̲͚͍̹̙̣̈́̒̓́̓̈́́̂̂͛͘͜e̵̛͕͕͕̫͈̥̥̤̰͆͆͊͑̊̋́͋̆̌͊̽͌͌̒̒̽̏̎̑̅̒̓̈̀̐̀̓͆̏̒̀̂̓͑̏̇̒̀̂̔̅̚͝͠͠͠͠͠ͅ ̷̨̛̺̺͔̭̦̮̗͎͍̥̜̺̠̮̮̦̤͚̬̫͖͎̘̗̖̖̱̮̭̼̯̖̣̳̗͙̫̮̉́̀̄̔̑͛̾̈́̃́̈́̉̈͜͝ͅͅz̵̧̧͎̺͓͍̙̥̤̩͕̯̬̦̮͖͉̦̺̭̳̬͚͙͇̻̬̼̣͇͒̈͂̓̽̒̒̉͐́͌͊͐͌̕ą̵͎̱̻̰͙̪̘̟͓̺̫͇̬̝̓̊͆̍͂̽̆̽́̅̐̾͋̃̉͘ͅḽ̵̨̢̠̯͈͎͖͇̖̬̜̪̖̳͈̺̬̞̦̲̲̥̥͙͚̤͖̯̙̘͎̥͎̰͉̖̠͙̦̮̩̓͂̑͛̓̎͌̽́͌̐̈́̈́̆͋͜͠͝g̷̘̤̾̔o̷̺̤̠̰̱̍͑̃͆̎̔͒̂̔̀͊́͋̎̾́̃̃̽̍̅̊̈͒͠ ̸̧̢̡̧͉̣̠̲͙͓̝̳͉̖̖̺͓̬̻̤̦͓̝͉̱̲̦̪̹͚̲̗̇̀͛̓̅̃̔̈́̒̏̔̉̊̽̍̀̈́́̇̀̕̚̕͜͝͝͝͝ͅṯ̸̨̡̺̥̦͓̺̤̬̺͈̺̰̳̟̖͇̜̻̘̜͇̖͉͉͉̘̮̹͍̘̼̬̣̥̪̗̬̰̻͋͆́̃͌̓̆̄̂̽̉̓͋́̒̇͋̍̄̒͐̇̈͂͐̎̆́̐̒́͊̓̽̀͊̇̓̈́͝ͅͅͅḛ̶̡̧̢̛̼̬̯̟͔͙̝̪̭̳̜̥̪̤̥͕̖̦̥̗͈̟̩̲͚̎̽̉̉̄̀̈́͆̈̈͐̊͆͌̐̈́̔̽̓̽̓̿́̍͛̇̀̊̚̚͜͜͝͝͝x̶̛̲̓̋̂͗̉̽́̇͠͝ț̷̨̨͙̞̼̠̜̖͈̱̻̖͎͖̣͙̲̰̜͙̟̯̫̹̞̙̟̦̖̞̝̩͇̹͍̠̮͇̫͌̓̑͛̒̈́̓̿̓̇̀̾́͐̇̊̔͊̓͐͘ ̵̨̡̛̖̰̲̘̘̲̳̹̭͓͈̼̫̞̰̜͇͈̭͔̺̝̝̥̜͍͇͔̮͛̇̀͛͛̆̐̒̇̓͌̒̔̄̐̅̓͂̏̓̈́̀̄́̾̒͆̀͗̈̚̕̚͠͝͝͝g̶̡̡̡̟̫͈̻͇̮̱̤̰̞̱̳̳̮̥̲̱̺̫̗̲̣͎̝̱̫̤̗̲̯̦̹̘̫̏̀̑̈́̏̓̌͛͜͜͜͝ȩ̸̢̢̧̛̛̘͇̲͙͓̳̘͈͕̣̫̝̲̦̜̪̩̦̞̬̠̤͕̬̬̼̄͂͆̓̾̿͊͒̔́̌̓͋͗̌̽̀͑̇̐̒̅͛̔͆̑̈̄̎͌̍̈̍͛́͋͑̕͘̕͝͝͝͠n̷̹͇̞̗̝͔̙̬͚̰̫̱͍͔̜̙͊̈́̆̓̊̈́̇̊͆̈́̋̈͆̌͆͛̿̿̾͆͒͑͂̿̃̔͐̿͐͒̍͆̃̽̅̽́̀̆̄͌̿̕͘̕͘͝͝e̷̢̨̢̡̹͈͔̲̣̖̪̫͔̦̬̠̭̲̠͕̟͒̂͊͐̾̐̍̿̉͛͊̉̈́̅̾͌͊̂͆̅̈̌̓͑̓͊̅͊̕̕͜͝ͅṟ̶̨̨̢̧͓͚̹̗̜̭͍̹̥̼̭̠̩̜̥͚͖̼͕͈̙̻̻̫͔̙͎̦̟̺̰͋̔̌̆̿͆͗̒́̉͆̀́̿̑̐͛̉̈̀̕̚͘͘̕̕͜͜͜a̸̢̞̭̭̣̙̥̤̝̤͍̺̔̒͑̉̂́̉̄̂͑̓̋̈́̾́̓͂͑͂̽̍̾͘͠͝ţ̵̨̨̘͉̙͈̣̗̩̙̠̖̖̣̻̯̣͉̳̭͕̗̤͔͕͓̗͎͔̎̐̀̈̋͑͘ͅȯ̵̢̨̨͕̞̲͔̞̮̺̪̟͖̦̺̤̗̘̖͔̪͔̼̘̘̤̲͎͖̹̤͇͓͇̽͂̇̂͊̀̊͂̋͐̿͆͋̀̀̆͒̀́͘̚͜͝ͅr̷̛̛̛̛̠̞̫̒̃͗̃̈̓͗̒̊̂̄̊̍́́͒͛̾̍̂͒̀̓̐̈́̆̍̐̄̃̎͘͘̕͜͝͝.̶̨̧̧̨̖̞̰̳̺͔͕̦̞̠̰̫̗̯̺̞͕̻̖̙̟̞̭̹͎̖̝͖̝̰͇̞̻̥͖̳̖̣͓̯̭̩͈͆̊̄̊̀̉̑͠͝ͅͅ
         text_val = self.options[self.index] if self.options else "---"
         if os.path.sep in str(text_val):
             text_val = os.path.basename(text_val)
 
         surf = self.font.render(str(text_val), True, self.text_color)
-
         text_y = self.rect.y + (self.rect.height - surf.get_height()) // 2
         screen.blit(surf, (self.rect.x + 10, text_y))
 
@@ -737,8 +737,10 @@ class DropdownMenu:
                     self.item_height,
                 )
 
-                is_hovered = opt_rect.collidepoint(mx, my) and list_rect.collidepoint(
-                    mx, my
+                is_hovered = (
+                    opt_rect.collidepoint(mx, my)
+                    and list_rect.collidepoint(mx, my)
+                    and not self.dragging_scrollbar
                 )
 
                 color = current_hover if is_hovered else current_active
@@ -759,6 +761,7 @@ class DropdownMenu:
 
             pygame.draw.rect(screen, current_border, list_rect, 2)
 
+            # scrollbar
             if total_height > display_height:
                 sb_bg_rect = pygame.Rect(
                     self.rect.right - self.scrollbar_width,
@@ -781,14 +784,41 @@ class DropdownMenu:
                     self.scrollbar_width - 4,
                     thumb_h,
                 )
-                pygame.draw.rect(
-                    screen, palette["scrollbar"], sb_thumb_rect, border_radius=4
+
+                sb_color = (
+                    palette["slider_fill"]
+                    if self.dragging_scrollbar
+                    else palette["scrollbar"]
                 )
+                pygame.draw.rect(screen, sb_color, sb_thumb_rect, border_radius=4)
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEWHEEL:
-            mx, my = pygame.mouse.get_pos()
+        mx, my = pygame.mouse.get_pos()
 
+        if event.type == pygame.MOUSEMOTION:
+            if self.dragging_scrollbar and self.is_open:
+                num_items = len(self.options)
+                total_height = num_items * self.item_height
+                display_count = min(num_items, self.max_display_items)
+                display_height = display_count * self.item_height
+                max_scroll = max(0, total_height - display_height)
+
+                if max_scroll > 0:
+                    ratio = display_height / total_height
+                    thumb_h = max(20, display_height * ratio)
+                    track_len = display_height - thumb_h
+                    delta_y = my - self.drag_start_mouse_y
+                    delta_scroll = (delta_y / track_len) * max_scroll
+                    self.scroll_y = self.drag_start_scroll_y + delta_scroll
+                    self.scroll_y = max(0, min(self.scroll_y, max_scroll))
+                return True
+
+        if event.type == pygame.MOUSEBUTTONUP:
+            if self.dragging_scrollbar:
+                self.dragging_scrollbar = False
+                return True
+
+        if event.type == pygame.MOUSEWHEEL:
             if self.is_open and self.options:
                 display_height = (
                     min(len(self.options), self.max_display_items) * self.item_height
@@ -803,14 +833,9 @@ class DropdownMenu:
                 if list_rect.collidepoint(mx, my):
                     total_height = len(self.options) * self.item_height
                     max_scroll = max(0, total_height - display_height)
-
                     scroll_speed = 20
                     self.scroll_y -= event.y * scroll_speed
-
-                    if self.scroll_y < 0:
-                        self.scroll_y = 0
-                    if self.scroll_y > max_scroll:
-                        self.scroll_y = max_scroll
+                    self.scroll_y = max(0, min(self.scroll_y, max_scroll))
                     return True
 
             elif not self.is_open and self.rect.collidepoint(mx, my):
@@ -819,17 +844,16 @@ class DropdownMenu:
                         self.index -= 1
                     elif event.y < 0:
                         self.index += 1
-
                     self.index = max(0, min(self.index, len(self.options) - 1))
                     return True
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos
-
             if self.is_open and self.options:
-                display_height = (
-                    min(len(self.options), self.max_display_items) * self.item_height
-                )
+                num_items = len(self.options)
+                total_height = num_items * self.item_height
+                display_count = min(num_items, self.max_display_items)
+                display_height = display_count * self.item_height
+
                 list_rect = pygame.Rect(
                     self.rect.x,
                     self.rect.y + self.rect.height,
@@ -838,7 +862,29 @@ class DropdownMenu:
                 )
 
                 if list_rect.collidepoint(mx, my):
-                    if mx > self.rect.right - self.scrollbar_width:
+                    if (
+                        total_height > display_height
+                        and mx > self.rect.right - self.scrollbar_width
+                    ):
+                        ratio = display_height / total_height
+                        thumb_h = max(20, display_height * ratio)
+                        max_scroll = total_height - display_height
+                        scroll_ratio = self.scroll_y / max_scroll
+                        thumb_y = list_rect.y + scroll_ratio * (
+                            display_height - thumb_h
+                        )
+
+                        sb_thumb_rect = pygame.Rect(
+                            self.rect.right - self.scrollbar_width,
+                            thumb_y,
+                            self.scrollbar_width,
+                            thumb_h,
+                        )
+
+                        if sb_thumb_rect.collidepoint(mx, my):
+                            self.dragging_scrollbar = True
+                            self.drag_start_mouse_y = my
+                            self.drag_start_scroll_y = self.scroll_y
                         return True
 
                     relative_y = my - list_rect.y + self.scroll_y
@@ -853,6 +899,7 @@ class DropdownMenu:
                     mx, my
                 ):
                     self.is_open = False
+                    self.dragging_scrollbar = False
 
             if self.rect.collidepoint(mx, my):
                 self.is_open = not self.is_open
@@ -861,7 +908,7 @@ class DropdownMenu:
         return False
 
 
-# -------------------- slot shit --------------------
+# -------------------- initializing everything --------------------
 
 slots = []
 for i in range(12):
@@ -899,8 +946,6 @@ manual_override_open = False
 dragging_slider = None
 panel_open = False
 selected_slot = None
-
-# relative/parallel mode shit
 use_relative_mode = False
 
 audio_engine.start()
@@ -911,7 +956,7 @@ available_themes = [
 ]
 available_fonts = pygame.font.get_fonts()
 available_fonts.sort()
-if "arial" not in available_fonts and len(available_fonts) > 0:  # yeah this thing lol
+if "arial" not in available_fonts and len(available_fonts) > 0:
     available_fonts.insert(0, "arial")
 
 all_fonts = available_fonts.copy()
@@ -924,7 +969,6 @@ def get_idx(lst, item):
         return 0
 
 
-# option s
 dropdown_theme = DropdownMenu(
     350,
     200,
@@ -961,9 +1005,9 @@ def reset_master():
     master_scale = None
 
 
+# this resets the whole app state aside from user configs
 def restart_application():
     global master_bpm, master_key, master_scale
-
     print("Restarting...")
     audio_engine.stop()
 
@@ -977,30 +1021,26 @@ def restart_application():
     audio_engine.max_length = 0
     audio_engine.position = 0
     audio_engine.start()
-
     print("Restart Complete.")
 
 
 def get_song_list():
     all_songs = []
-
     for folder in SONG_FOLDERS:
         if not os.path.exists(folder):
             os.makedirs(folder)
             continue
-
         songs = [
             os.path.join(folder, x)
             for x in os.listdir(folder)
             if os.path.isdir(os.path.join(folder, x))
         ]
         all_songs.extend(songs)
-
     all_songs.sort(key=lambda x: os.path.basename(x).lower())
-
     return all_songs
 
 
+# this loads the stem, loads its metadaya, does the time and pitch stretch, and then puts it into a slot
 def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
     global master_bpm, master_key, master_scale
 
@@ -1015,7 +1055,7 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
         stem_audio = None
         custom_color = None
 
-        # met a data
+        # load metadata
         if stem_type in STANDARD_STEMS:
             meta_path = os.path.join(song_folder, "meta.json")
             with open(meta_path, "r") as f:
@@ -1048,23 +1088,18 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
                     fallback_path = os.path.join(
                         song_folder, f"{stem_type}_{fallback_scale}.ogg"
                     )
-
                     if os.path.exists(fallback_path):
                         file_to_load = f"{stem_type}_{fallback_scale}.ogg"
                         stem_scale = fallback_scale
                     else:
-                        tqdm.write(
-                            f"ERROR: No standard stem files found for {stem_type}."
-                        )
+                        tqdm.write(f"ERROR: No stem files found for {stem_type}.")
                         return
-
             pbar.update(1)
-
-            # load the shit
             full_path = os.path.join(song_folder, file_to_load)
             stem_audio = load_audio_data(full_path)
 
         else:
+            # custom stem shit
             json_path = os.path.join(song_folder, f"{stem_type}.json")
             ogg_path = os.path.join(song_folder, f"{stem_type}.ogg")
 
@@ -1081,17 +1116,14 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
                 master_key = stem_key
                 master_scale = stem_scale
                 if show_progress:
-                    tqdm.write(
-                        f"Master tuning set from custom stem to {master_key} {master_scale}."
-                    )
+                    tqdm.write(f"Master set to {master_key} {master_scale}.")
 
             pbar.update(1)
-
             stem_audio = load_audio_data(ogg_path)
 
         pbar.update(1)
 
-        # time streetch
+        # time stretch
         adjusted_bpm = match_bpm_timescale(stem_bpm, master_bpm)
         stretch_ratio = master_bpm / adjusted_bpm
         if stretch_ratio != 1.0:
@@ -1111,6 +1143,7 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
             if semis != 0:
                 stem_audio = rb.pitch_shift(stem_audio, SAMPLE_RATE, semis)
 
+        # length shit
         if audio_engine.max_length == 0:
             audio_engine.max_length = len(stem_audio)
 
@@ -1168,11 +1201,13 @@ def clear_slot(i):
     print(f"Slot {i} cleared.")
 
 
+# toggles the 1/2 offset thing
 def shift_slot(i):
     slot = slots[i]
     slot.half = 1 - slot.half
 
 
+# used for pause/play button
 def toggle_master_playback():
     (
         audio_engine.stop
@@ -1181,12 +1216,8 @@ def toggle_master_playback():
     )()
 
 
-# -------------------- saving and loading and exporting --------------------
-
-
 def export_mix_to_wav(filename="export.wav"):
     print("Starting export...")
-
     max_len = audio_engine.max_length
     if max_len == 0:
         print("ERROR: No audio data to export.")
@@ -1197,7 +1228,6 @@ def export_mix_to_wav(filename="export.wav"):
     for slot in slots:
         if slot.empty or slot.stem is None:
             continue
-
         if slot.mute:
             continue
 
@@ -1252,7 +1282,6 @@ def save_project(filename="project_data.json"):
             data["slots"].append(slot_data)
 
     full_path = os.path.join("projects", filename)
-
     try:
         with open(full_path, "w") as f:
             json.dump(data, f, indent=4)
@@ -1278,7 +1307,6 @@ def load_project(filename):
 
     pygame.draw.rect(screen, palette["input_bg"], wait_rect)
     pygame.draw.rect(screen, palette["input_border"], wait_rect, 2)
-
     draw_text_centered(
         "Loading Project...", FONT_LARGE, palette["text_main"], wait_rect
     )
@@ -1336,15 +1364,14 @@ def load_project(filename):
         print(f"Error loading project: {e}")
 
 
-# stem select
+# -------------------- the worst part of the code --------------------
+
 dropdown_song_select = DropdownMenu(
     240, 200, 360, 35, get_song_list(), max_display_items=16
 )
 dropdown_stem_type_select = DropdownMenu(
     240, 260, 360, 35, ["vocals", "bass", "lead", "drums"], max_display_items=8
 )
-
-# manual tune
 dropdown_manual_key = DropdownMenu(
     220,
     235,
@@ -1358,19 +1385,15 @@ dropdown_manual_scale = DropdownMenu(
 )
 input_manual_bpm = TextInput(370, 200, 100, 35)
 
-# -------------------- main loop --------------------
-
-dragging_master_vol = False  # gurhugf
-
+dragging_master_vol = False
 clock = pygame.time.Clock()
 running = True
 pulse_timer = 0
 
 while running:
-    # bg
+    # background
     screen.fill(palette["bg_dark"])
 
-    # grid
     grid_size = 40
     for x in range(0, SCREEN_W, grid_size):
         pygame.draw.line(screen, palette["bg_light"], (x, 0), (x, SCREEN_H))
@@ -1387,9 +1410,8 @@ while running:
         or loading_mode
     )
 
-    # slider sm64
+    # slider anims
     lerp_speed = 0.33
-
     for s in slots:
         if s.volume != s.target_volume:
             diff = s.target_volume - s.volume
@@ -1398,58 +1420,47 @@ while running:
             else:
                 s.volume += diff * lerp_speed
 
-    # manual tune button
+    # buttons (this one is manual tune)
     mt_btn_rect = pygame.Rect(20, 20, 200, 40)
     mt_btn_color = palette["btn_manual"]
-
     if mt_btn_rect.collidepoint(mx, my) and not input_blocked:
         mt_outline_col = lighten_color(mt_btn_color, factor=1.2)
     else:
         mt_outline_col = darken_color(mt_btn_color)
-
     pygame.draw.rect(screen, mt_btn_color, mt_btn_rect, border_radius=4)
     pygame.draw.rect(screen, mt_outline_col, mt_btn_rect, 4, border_radius=4)
-
     draw_text_centered(
         "Set Manual Tuning", FONT_MEDIUM, palette["text_main"], mt_btn_rect
     )
 
-    # restart button
+    # reset (reinitialize the app) button
     btn_reset_rect = pygame.Rect(230, 20, 90, 40)
     reset_col = palette["btn_cancel"]
-
     if btn_reset_rect.collidepoint(mx, my) and not input_blocked:
         reset_outline = lighten_color(reset_col, 1.2)
     else:
         reset_outline = darken_color(reset_col)
-
     pygame.draw.rect(screen, reset_col, btn_reset_rect, border_radius=4)
     pygame.draw.rect(screen, reset_outline, btn_reset_rect, 4, border_radius=4)
     draw_text_centered("Reset", FONT_MEDIUM, palette["text_main"], btn_reset_rect)
 
-    # export WAV button
-    btn_exp_w = 140
-    btn_exp_h = 40
+    # export wav button
+    btn_exp_w, btn_exp_h = 140, 40
     btn_exp_rect = pygame.Rect(
         SCREEN_W - btn_exp_w - 20, SCREEN_H - btn_exp_h - 20, btn_exp_w, btn_exp_h
     )
-
     exp_col = palette["accent"]
-
     if btn_exp_rect.collidepoint(mx, my) and not input_blocked:
         exp_outline = lighten_color(exp_col, 1.2)
     else:
         exp_outline = darken_color(exp_col)
-
     pygame.draw.rect(screen, exp_col, btn_exp_rect, border_radius=4)
     pygame.draw.rect(screen, exp_outline, btn_exp_rect, 4, border_radius=4)
-
     draw_text_centered("Export WAV", FONT_MEDIUM, palette["text_main"], btn_exp_rect)
 
     # save and load buttons
     btn_save_rect = pygame.Rect(SCREEN_W - 320, 20, 90, 40)
     btn_load_rect = pygame.Rect(SCREEN_W - 220, 20, 90, 40)
-
     save_col = palette["btn_save"]
     load_col = palette["btn_load"]
 
@@ -1457,7 +1468,6 @@ while running:
         save_outline = lighten_color(save_col, 1.2)
     else:
         save_outline = darken_color(save_col)
-
     if btn_load_rect.collidepoint(mx, my) and not input_blocked:
         load_outline = lighten_color(load_col, 1.2)
     else:
@@ -1465,44 +1475,36 @@ while running:
 
     pygame.draw.rect(screen, save_col, btn_save_rect, border_radius=4)
     pygame.draw.rect(screen, save_outline, btn_save_rect, 4, border_radius=4)
-
     pygame.draw.rect(screen, load_col, btn_load_rect, border_radius=4)
     pygame.draw.rect(screen, load_outline, btn_load_rect, 4, border_radius=4)
-
     draw_text_centered("Save", FONT_MEDIUM, palette["text_main"], btn_save_rect)
     draw_text_centered("Load", FONT_MEDIUM, palette["text_main"], btn_load_rect)
 
-    # option button
+    # options button
     btn_opt_rect = pygame.Rect(SCREEN_W - 120, 20, 90, 40)
-
     if btn_opt_rect.collidepoint(mx, my) and not input_blocked:
         opt_outline = lighten_color(palette["btn_ctrl"], 1.2)
     else:
         opt_outline = darken_color(palette["btn_ctrl"])
-
     pygame.draw.rect(screen, palette["btn_ctrl"], btn_opt_rect, border_radius=4)
     pygame.draw.rect(screen, opt_outline, btn_opt_rect, 4, border_radius=4)
     draw_text_centered("Options", FONT_MEDIUM, palette["text_main"], btn_opt_rect)
 
-    # what
+    # this does the slot pulse
     pulse_val = 0.0
     if audio_engine.stream and audio_engine.stream.active:
         pulse_timer += clock.get_time()
-
     if master_bpm and master_bpm > 0:
         ms_per_beat = 60000 / master_bpm
-
         base_sine_wave = math.sin(
             (pulse_timer * 2 * math.pi) / ms_per_beat - (math.pi / 2)
         )
-
         tanh_gain = 3.0
-        curved_sin = math.tanh(base_sine_wave * tanh_gain)  # math tuah
-
+        curved_sin = math.tanh(base_sine_wave * tanh_gain)
         max_val = math.tanh(tanh_gain)
         pulse_val = (curved_sin / max_val + 1) / 2
 
-    # pause play restart button
+    # buttons but only playback control buttons this time
     ctrl_btn_w = 60
     ctrl_btn_h = 40
     ctrl_gap = 12
@@ -1518,15 +1520,13 @@ while running:
     btn_ctrl_col = palette["btn_ctrl"]
     icon_col = palette["btn_icon"]
 
-    # restart button
+    # start from beginning button
     if btn_restart_rect.collidepoint(mx, my) and not input_blocked:
         restart_outline = lighten_color(btn_ctrl_col, 1.2)
     else:
         restart_outline = darken_color(btn_ctrl_col)
-
     pygame.draw.rect(screen, btn_ctrl_col, btn_restart_rect, border_radius=2)
     pygame.draw.rect(screen, restart_outline, btn_restart_rect, 4, border_radius=2)
-
     pygame.draw.rect(
         screen,
         icon_col,
@@ -1539,22 +1539,17 @@ while running:
     ]
     pygame.draw.polygon(screen, icon_col, pts_restart)
 
-    # pause button
+    # pause/play
     if btn_play_rect.collidepoint(mx, my) and not input_blocked:
         play_outline = lighten_color(btn_ctrl_col, 1.2)
     else:
         play_outline = darken_color(btn_ctrl_col)
-
     pygame.draw.rect(screen, btn_ctrl_col, btn_play_rect, border_radius=2)
     pygame.draw.rect(screen, play_outline, btn_play_rect, 4, border_radius=2)
 
     is_playing = audio_engine is not None and audio_engine.stream.active
-
     if is_playing:
-        bar_w = 6
-        bar_h = 16
-        gap = 4
-
+        bar_w, bar_h, gap = 6, 16, 4
         pygame.draw.rect(
             screen,
             icon_col,
@@ -1575,12 +1570,8 @@ while running:
                 bar_h,
             ),
         )
-
     else:
-        tri_w = 14
-        tri_h = 16
-        gap = 4
-
+        tri_w, tri_h, gap = 14, 16, 4
         pts = [
             (btn_play_rect.centerx - 4, btn_play_rect.centery - tri_h // 2),
             (btn_play_rect.centerx - 4, btn_play_rect.centery + tri_h // 2),
@@ -1590,7 +1581,7 @@ while running:
 
     any_solo_visual = any(s.solo for s in slots if not s.empty)
 
-    # draw slots
+    # slots
     for i in range(12):
         slot = slots[i]
         cx = 120 + (i % 4) * 200
@@ -1598,7 +1589,6 @@ while running:
 
         dist = (mx - cx) ** 2 + (my - cy) ** 2
         is_hovered = dist <= CIRCLE_RADIUS**2 and not input_blocked
-
         should_pulse = False
 
         if slot.empty:
@@ -1642,9 +1632,7 @@ while running:
         max_text_width = (CIRCLE_RADIUS * 2) - 10
         name = slot.song_name if slot.song_name else "Empty"
         stype = slot.type if slot.type else ""
-
         mode_label = ""
-
         if not slot.empty and slot.type != "drums" and master_scale:
             if slot.scale == master_scale:
                 mode_label = f"{slot.scale.capitalize()}"
@@ -1671,18 +1659,14 @@ while running:
             )
 
         off_x, off_y = cx + 30, cy + 30
-        off_hover = False
-        if (
+        off_hover = (
             off_x <= mx <= off_x + 32
             and off_y <= my <= off_y + 32
             and not input_blocked
-        ):
-            off_hover = True
-
+        )
         draw_half_offset(screen, off_x, off_y, slot.half == 1, off_hover)
 
         ms_x, ms_y = cx - 45, cy + 32
-
         pygame.draw.rect(
             screen, (30, 30, 30), (ms_x - 2, ms_y - 2, 48, 24), border_radius=4
         )
@@ -1692,111 +1676,79 @@ while running:
         sy = cy + CIRCLE_RADIUS + 15
         draw_slider(sx, sy, SLIDER_W, SLIDER_H, slot.volume)
 
-    # ---------- hud things ----------
-
-    # the text
+    # tune text
     if master_bpm is not None:
         display_k = get_display_key(master_key)
         stats_text = f"BPM: {master_bpm:.1f} | KEY: {display_k} {master_scale}"
     else:
         stats_text = "No Tuning Set"
-
-    # rendering
     stats_surf = FONT_LARGE.render(stats_text, True, text_color)
     stats_outline = FONT_LARGE.render(stats_text, True, palette["text_dark"])
-
-    # pos
     stat_x = 19
     stat_y = SCREEN_H - stats_surf.get_height() - 10
-
-    # draw outline
     offsets = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
-
     for dx, dy in offsets:
         screen.blit(stats_outline, (stat_x + dx, stat_y + dy))
-
-    # draw text
     screen.blit(stats_surf, (stat_x, stat_y))
 
-    # -------------------- panels --------------------
-
-    # stem select
+    # song/stem select panel
     if panel_open:
         pygame.draw.rect(screen, palette["input_bg"], (220, 125, 400, 300))
         pygame.draw.rect(screen, palette["input_border"], (220, 125, 400, 300), 2)
-
         title = FONT_LARGE.render(f"Slot {selected_slot}", True, text_color)
         screen.blit(title, (300, 135))
-
         screen.blit(FONT_MEDIUM.render("Song:", True, text_color), (240, 175))
         dropdown_song_select.draw(screen)
-
         screen.blit(FONT_MEDIUM.render("Stem:", True, text_color), (240, 235))
         dropdown_stem_type_select.draw(screen)
-
         stem_confirm_rect = pygame.Rect(240, 325, 170, 50)
         stem_cancel_rect = pygame.Rect(430, 325, 170, 50)
-
         draw_action_button(
             screen, "CONFIRM", stem_confirm_rect, palette["btn_confirm"], mx, my
         )
         draw_action_button(
             screen, "CANCEL", stem_cancel_rect, palette["btn_cancel"], mx, my
         )
-
-        # draw lists last
         dropdown_song_select.draw_list(screen)
         dropdown_stem_type_select.draw_list(screen)
 
-    # manual tune
+    # manual tuning panel
     if manual_override_open:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
         overlay.fill(palette["overlay"])
         screen.blit(overlay, (0, 0))
-
         pygame.draw.rect(screen, palette["input_bg"], (170, 120, 500, 300))
         pygame.draw.rect(screen, palette["input_border"], (170, 120, 500, 300), 2)
-
         title = FONT_LARGE.render("Manual Tuning Menu", True, text_color)
         screen.blit(title, (280, 135))
-
         screen.blit(FONT_MEDIUM.render("BPM:", True, text_color), (310, 205))
         input_manual_bpm.draw(screen)
-
         screen.blit(FONT_MEDIUM.render("Key:", True, text_color), (220, 265))
         dropdown_manual_key.rect.y = 260
         dropdown_manual_key.draw(screen)
-
         screen.blit(FONT_MEDIUM.render("Mode:", True, text_color), (440, 265))
         dropdown_manual_scale.rect.y = 260
         dropdown_manual_scale.draw(screen)
-
         tune_confirm_rect = pygame.Rect(230, 340, 180, 50)
         tune_cancel_rect = pygame.Rect(430, 340, 180, 50)
-
         draw_action_button(
             screen, "CONFIRM", tune_confirm_rect, palette["btn_confirm"], mx, my
         )
-
         draw_action_button(
             screen, "CANCEL", tune_cancel_rect, palette["btn_cancel"], mx, my
         )
-
         dropdown_manual_key.draw_list(screen)
         dropdown_manual_scale.draw_list(screen)
 
-    # options
+    # options panel
     if options_open:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
         overlay.fill(palette["overlay"])
         screen.blit(overlay, (0, 0))
-
         pygame.draw.rect(screen, palette["input_bg"], (220, 100, 400, 450))
         pygame.draw.rect(screen, palette["input_border"], (220, 100, 400, 450), 2)
-
         title = FONT_LARGE.render("Options", True, text_color)
         screen.blit(title, (360, 115))
-
         screen.blit(
             FONT_MEDIUM.render(
                 f"Master Vol: {int(audio_engine.master_volume * 100)}%",
@@ -1806,7 +1758,6 @@ while running:
             (250, 140),
         )
         vol_rect = pygame.Rect(350, 170, 200, 15)
-
         draw_slider(
             vol_rect.x,
             vol_rect.y,
@@ -1814,72 +1765,51 @@ while running:
             vol_rect.height,
             audio_engine.master_volume,
         )
-
         screen.blit(FONT_MEDIUM.render("Theme:", True, text_color), (250, 195))
         dropdown_theme.rect.y = 190
         dropdown_theme.draw(screen)
-
         screen.blit(FONT_MEDIUM.render("Font:", True, text_color), (250, 250))
         dropdown_font.rect.y = 245
         dropdown_font.draw(screen)
-
         screen.blit(FONT_MEDIUM.render("Notation:", True, text_color), (250, 305))
         btn_notation_toggle.y = 300
-
         not_col = (
             palette["input_active"] if use_flat_notation else palette["btn_manual"]
         )
         not_text = "Flats (b)" if use_flat_notation else "Sharps (#)"
-
         pygame.draw.rect(screen, not_col, btn_notation_toggle)
         pygame.draw.rect(screen, palette["text_dark"], btn_notation_toggle, 2)
-
         draw_text_centered(
             not_text, FONT_MEDIUM, palette["text_main"], btn_notation_toggle
         )
-
         opt_close_rect = pygame.Rect(335, 480, 170, 50)
-
         draw_action_button(
             screen, "CLOSE", opt_close_rect, palette["btn_cancel"], mx, my
         )
-
         dropdown_theme.draw_list(screen)
         dropdown_font.draw_list(screen)
 
-    # -------------------- save and load overlays --------------------
-
+    # saving panel
     if saving_mode:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
         overlay.fill(palette["overlay"])
         screen.blit(overlay, (0, 0))
-
         box_rect = pygame.Rect((SCREEN_W - 400) // 2, (SCREEN_H - 250) // 2, 400, 250)
-
         pygame.draw.rect(screen, palette["input_bg"], box_rect)
         pygame.draw.rect(screen, palette["input_border"], box_rect, 2)
-
         title_rect = pygame.Rect(box_rect.x, box_rect.y + 25, 400, 40)
         draw_text_centered(
-            "Save Project As...",
-            FONT_LARGE,
-            palette["text_main"],
-            title_rect,
+            "Save Project As...", FONT_LARGE, palette["text_main"], title_rect
         )
-
         save_input.rect.center = box_rect.center
         save_input.draw(screen)
-
         btn_w, btn_h = 120, 40
         gap = 20
-
         total_w = (btn_w * 2) + gap
         start_x = box_rect.centerx - (total_w // 2)
         btn_y = box_rect.bottom - 60
-
         save_confirm_rect = pygame.Rect(start_x, btn_y, btn_w, btn_h)
         save_cancel_rect = pygame.Rect(start_x + btn_w + gap, btn_y, btn_w, btn_h)
-
         draw_action_button(
             screen,
             "SAVE",
@@ -1899,37 +1829,27 @@ while running:
             FONT_MEDIUM,
         )
 
+    # loading panel
     if loading_mode:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
         overlay.fill(palette["overlay"])
         screen.blit(overlay, (0, 0))
-
         box_rect = pygame.Rect((SCREEN_W - 400) // 2, (SCREEN_H - 300) // 2, 400, 300)
-
         pygame.draw.rect(screen, palette["input_bg"], box_rect)
         pygame.draw.rect(screen, palette["input_border"], box_rect, 2)
-
         title_rect = pygame.Rect(box_rect.x, box_rect.y + 25, 400, 40)
         draw_text_centered(
-            "Select File to Load",
-            FONT_LARGE,
-            palette["text_main"],
-            title_rect,
+            "Select File to Load", FONT_LARGE, palette["text_main"], title_rect
         )
-
         if dropdown_load_project:
             dropdown_load_project.draw(screen)
-
         btn_w, btn_h = 120, 40
         gap = 20
-
         total_w = (btn_w * 2) + gap
         start_x = box_rect.centerx - (total_w // 2)
         btn_y = box_rect.bottom - 60
-
         load_confirm_rect = pygame.Rect(start_x, btn_y, btn_w, btn_h)
         load_cancel_rect = pygame.Rect(start_x + btn_w + gap, btn_y, btn_w, btn_h)
-
         draw_action_button(
             screen,
             "LOAD",
@@ -1948,31 +1868,42 @@ while running:
             my,
             FONT_MEDIUM,
         )
-
         if dropdown_load_project:
             dropdown_load_project.draw_list(screen)
 
-    # -------------------- input handler GOD THIS SUCKS --------------------
+    # -------------------- ACTUALLY the worst part of the code --------------------
 
     for event in pygame.event.get():
+
         if event.type == pygame.QUIT:
-            save_config()
+            save_config()  # save settings before exiting
             running = False
 
         mx, my = pygame.mouse.get_pos()
 
+        # mouse movement check (for dragging stuff)
         if event.type == pygame.MOUSEMOTION:
+
+            # master volume slider
             if dragging_master_vol:
                 rel_x = mx - 350
                 audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
 
+        # letting go of left click
         if event.type == pygame.MOUSEBUTTONUP:
+
+            # stop dragging master volume slider
             if dragging_master_vol:
                 dragging_master_vol = False
                 save_config()
+
+            # stop dragging slot volume slider
             dragging_slider = None
 
+        # save panel stuff
         if saving_mode:
+
+            # immediately save if you press enter
             if save_input.handle_event(event):
                 fname = save_input.text
                 if len(fname) > 0:
@@ -1982,6 +1913,7 @@ while running:
                     saving_mode = False
                     pygame.key.stop_text_input()
 
+            # save and cancel buttons
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 box_rect = pygame.Rect(
                     (SCREEN_W - 400) // 2, (SCREEN_H - 250) // 2, 400, 250
@@ -1991,15 +1923,16 @@ while running:
                 total_w = (btn_w * 2) + gap
                 start_x = box_rect.centerx - (total_w // 2)
                 btn_y = box_rect.bottom - 60
-
                 save_confirm_rect = pygame.Rect(start_x, btn_y, btn_w, btn_h)
                 save_cancel_rect = pygame.Rect(
                     start_x + btn_w + gap, btn_y, btn_w, btn_h
                 )
 
+                # stupid fuckin thing
                 if save_input.rect.collidepoint(mx, my):
                     continue
 
+                # confirm
                 if save_confirm_rect.collidepoint(mx, my):
                     fname = save_input.text
                     if len(fname) > 0:
@@ -2009,16 +1942,18 @@ while running:
                         saving_mode = False
                         pygame.key.stop_text_input()
 
+                # cancel
                 elif save_cancel_rect.collidepoint(mx, my):
                     saving_mode = False
                     pygame.key.stop_text_input()
             continue
 
+        # load panel stuff
         if loading_mode:
-            if dropdown_load_project:
-                if dropdown_load_project.handle_event(event):
-                    continue
+            if dropdown_load_project and dropdown_load_project.handle_event(event):
+                continue
 
+            # load and cancel butons
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 box_rect = pygame.Rect(
                     (SCREEN_W - 400) // 2, (SCREEN_H - 300) // 2, 400, 300
@@ -2028,17 +1963,16 @@ while running:
                 total_w = (btn_w * 2) + gap
                 start_x = box_rect.centerx - (total_w // 2)
                 btn_y = box_rect.bottom - 60
-
                 load_confirm_rect = pygame.Rect(start_x, btn_y, btn_w, btn_h)
                 load_cancel_rect = pygame.Rect(
                     start_x + btn_w + gap, btn_y, btn_w, btn_h
                 )
 
+                # load the project
                 if load_confirm_rect.collidepoint(mx, my):
                     sel = dropdown_load_project.get_selected()
                     if sel:
                         load_project(sel)
-
                         if master_bpm:
                             input_manual_bpm.text = str(int(master_bpm))
                             input_manual_bpm.txt_surface = input_manual_bpm.font.render(
@@ -2059,10 +1993,12 @@ while running:
 
                 elif load_cancel_rect.collidepoint(mx, my):
                     loading_mode = False
-
             continue
 
+        # options panel stuff
         if options_open:
+
+            # themes
             if dropdown_theme.handle_event(event):
                 sel = dropdown_theme.get_selected()
                 if sel:
@@ -2070,14 +2006,19 @@ while running:
                     save_config()
                 continue
 
+            # fonts
             if dropdown_font.handle_event(event):
                 sel = dropdown_font.get_selected()
                 if sel:
                     update_fonts(sel)
+
+                    # re-render stuff that is dependent on font size
                     input_manual_bpm.font = FONT_MEDIUM
                     input_manual_bpm.txt_surface = input_manual_bpm.font.render(
                         input_manual_bpm.text, True, palette["text_main"]
                     )
+
+                    # reset dropdowns
                     dropdown_theme.font = FONT_SMALL
                     dropdown_font.font = FONT_SMALL
                     dropdown_song_select.font = FONT_SMALL
@@ -2088,6 +2029,8 @@ while running:
                 continue
 
             if event.type == pygame.MOUSEBUTTONDOWN:
+
+                # master volume drag
                 if pygame.mouse.get_pressed()[0]:
                     vol_rect = pygame.Rect(350, 170, 200, 15)
                     if vol_rect.collidepoint(mx, my):
@@ -2096,39 +2039,42 @@ while running:
                         audio_engine.master_volume = max(0.0, min(1.0, rel_x / 200))
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+
+                # notation toggle
                 if btn_notation_toggle.collidepoint(mx, my):
                     use_flat_notation = not use_flat_notation
                     save_config()
 
+                    # update key ropdown
                     new_keys = KEYS_FLAT if use_flat_notation else KEYS_SHARP
                     dropdown_manual_key.update_options(new_keys)
 
+                # close
                 opt_close_rect = pygame.Rect(335, 480, 170, 50)
                 if opt_close_rect.collidepoint(mx, my):
                     options_open = False
-
             continue
 
-        # manual tuning inputs
+        # manual tune panel stuff
         if manual_override_open:
             if dropdown_manual_key.handle_event(
                 event
             ) or dropdown_manual_scale.handle_event(event):
                 continue
 
+            # bpm text input
             input_manual_bpm.handle_event(event)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # hitboxes
                 btn_manual_confirm = pygame.Rect(230, 340, 180, 50)
                 btn_manual_cancel = pygame.Rect(430, 340, 180, 50)
 
-                # confirm click
+                # confirm
                 if btn_manual_confirm.collidepoint(mx, my):
+                    # loading screen
                     overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
                     overlay.fill(palette["overlay"])
                     screen.blit(overlay, (0, 0))
-
                     wait_w, wait_h = 300, 100
                     wait_rect = pygame.Rect(
                         (SCREEN_W - wait_w) // 2,
@@ -2136,14 +2082,12 @@ while running:
                         wait_w,
                         wait_h,
                     )
-
                     wait_text = FONT_LARGE.render(
                         "Processing...", True, palette["text_main"]
                     )
                     sub_text = FONT_MEDIUM.render(
                         "Please wait...", True, palette["text_dim"]
                     )
-
                     txt_rect1 = wait_text.get_rect(
                         centerx=wait_rect.centerx, centery=wait_rect.centery - 15
                     )
@@ -2158,9 +2102,9 @@ while running:
                     pygame.display.flip()
 
                     try:
+                        # update manual tuning
                         master_key = dropdown_manual_key.get_selected()
                         master_scale = dropdown_manual_scale.get_selected()
-
                         new_bpm = None
                         if input_manual_bpm.text and float(input_manual_bpm.text) > 0:
                             new_bpm = float(input_manual_bpm.text)
@@ -2168,6 +2112,7 @@ while running:
 
                         audio_engine.stop()
 
+                        # find slots that need to reload
                         slots_to_reload = []
                         for i, slot in enumerate(slots):
                             if not slot.empty:
@@ -2176,30 +2121,16 @@ while running:
                                 )
                                 slot.stem = None
 
+                        # reload the slot
                         audio_engine.max_length = 0
-
                         for data in slots_to_reload:
-                            print(f"Reloading slot {data['id']}...")
-
                             pygame.draw.rect(screen, palette["panel_bg"], wait_rect)
                             pygame.draw.rect(
                                 screen, palette["slider_fill"], wait_rect, 3
                             )
-
                             screen.blit(wait_text, txt_rect1)
                             screen.blit(sub_text, txt_rect2)
-
                             pygame.display.flip()
-
-                            if use_relative_mode:
-                                expected_scale = (
-                                    "minor" if master_scale == "major" else "major"
-                                )
-                            else:
-                                expected_scale = master_scale
-
-                            if data["type"] == "drums":
-                                expected_scale = None
 
                             song_path = None
                             for folder in SONG_FOLDERS:
@@ -2208,6 +2139,7 @@ while running:
                                     song_path = potential_path
                                     break
 
+                            # time and pitch shift
                             if song_path:
                                 add_stem_to_slot(data["id"], song_path, data["type"])
                             else:
@@ -2228,93 +2160,86 @@ while running:
                     manual_override_open = False
                     pygame.key.stop_text_input()
 
-                if btn_manual_cancel.collidepoint(mx, my):
+                # cancel
+                elif btn_manual_cancel.collidepoint(mx, my):
                     manual_override_open = False
                     pygame.key.stop_text_input()
+            continue
 
-                # cancel click
-                if btn_manual_cancel.collidepoint(mx, my):
-                    manual_override_open = False
-                    pygame.key.stop_text_input()
-                continue
-
-        # stem select inputs
+        # song/stem select panel stuff
         if panel_open:
             if dropdown_song_select.handle_event(event):
-                sel_song_path = dropdown_song_select.get_selected()
 
+                # update stem dropdown based on song
+                sel_song_path = dropdown_song_select.get_selected()
                 if sel_song_path and os.path.exists(sel_song_path):
                     new_stems = get_stem_types(sel_song_path)
                     dropdown_stem_type_select.update_options(new_stems)
                     dropdown_stem_type_select.index = 0
                 continue
-
             if dropdown_stem_type_select.handle_event(event):
                 continue
 
+            # confirm and cancel buttons
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                # hitboxes
                 btn_stem_confirm = pygame.Rect(240, 325, 170, 50)
                 btn_stem_cancel = pygame.Rect(430, 325, 170, 50)
 
-                # confirm click
                 if btn_stem_confirm.collidepoint(mx, my):
                     song_val = dropdown_song_select.get_selected()
                     stem_val = dropdown_stem_type_select.get_selected()
+
+                    # load stem
                     if song_val and stem_val:
                         add_stem_to_slot(selected_slot, song_val, stem_val)
                         panel_open = False
 
-                # cancel click
                 if btn_stem_cancel.collidepoint(mx, my):
                     panel_open = False
-
             continue
 
-        # main screen inputs
+        # main ui shit
         if event.type == pygame.MOUSEBUTTONDOWN:
 
-            # restart app
+            # restart the app button
             if btn_reset_rect.collidepoint(mx, my) and event.button == 1:
                 restart_application()
 
-            # expor
+            # export wav button
             if btn_exp_rect.collidepoint(mx, my) and event.button == 1:
                 overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
                 overlay.fill(palette["overlay"])
                 screen.blit(overlay, (0, 0))
-
                 wait_w, wait_h = 300, 100
                 wait_rect = pygame.Rect(
                     (SCREEN_W - wait_w) // 2, (SCREEN_H - wait_h) // 2, wait_w, wait_h
                 )
-
                 pygame.draw.rect(screen, palette["popup_bg"], wait_rect)
                 pygame.draw.rect(screen, palette["popup_border"], wait_rect, 3)
                 draw_text_centered(
                     "Rendering WAV...", FONT_LARGE, palette["text_main"], wait_rect
                 )
-
                 pygame.display.flip()
 
                 now = datetime.datetime.now()
                 timestamp = now.isoformat()[:19].replace(":", "-")
                 filename = os.path.join("exports", f"jam_{timestamp}.wav")
-
                 export_mix_to_wav(filename)
                 continue
 
-            # pause play restart
+            # restart playback
             if btn_restart_rect.collidepoint(mx, my) and event.button == 1:
                 audio_engine.restart()
 
+            # pause/play
             if btn_play_rect.collidepoint(mx, my) and event.button == 1:
                 toggle_master_playback()
 
-            # top left manual button
+            # manual tune
             if 20 <= mx <= 220 and 20 <= my <= 60 and event.button == 1:
                 manual_override_open = True
 
+                # prefill data
                 if master_bpm is not None:
                     bpm_str = str(master_bpm)
                     if bpm_str.endswith(".0"):
@@ -2322,23 +2247,23 @@ while running:
                     input_manual_bpm.text = bpm_str
                 else:
                     input_manual_bpm.text = ""
-
                 input_manual_bpm.txt_surface = input_manual_bpm.font.render(
                     input_manual_bpm.text, True, palette["text_main"]
                 )
-
                 if master_key and master_key in dropdown_manual_key.options:
                     dropdown_manual_key.index = dropdown_manual_key.options.index(
                         master_key
                     )
-
                 if master_scale and master_scale in dropdown_manual_scale.options:
                     dropdown_manual_scale.index = dropdown_manual_scale.options.index(
                         master_scale
                     )
 
+            # options
             if btn_opt_rect.collidepoint(mx, my):
                 options_open = True
+
+                # refresh the theme list
                 available_themes = [
                     f.replace(".json", "")
                     for f in os.listdir("themes")
@@ -2347,12 +2272,15 @@ while running:
                 dropdown_theme.update_options(available_themes)
                 continue
 
+            # save
             if btn_save_rect.collidepoint(mx, my) and event.button == 1:
                 saving_mode = True
                 pygame.key.start_text_input()
 
+            # load
             if btn_load_rect.collidepoint(mx, my) and event.button == 1:
                 loading_mode = True
+                # refresh file list
                 files = [f for f in os.listdir("projects") if f.endswith(".json")]
                 dropdown_load_project = DropdownMenu(
                     (SCREEN_W - 300) // 2,
@@ -2364,7 +2292,7 @@ while running:
                 )
                 continue
 
-            # right click clear slot
+            # clear slot
             if event.button == 3:
                 for i in range(12):
                     cx = 120 + (i % 4) * 200
@@ -2373,40 +2301,40 @@ while running:
                         clear_slot(i)
                         break
 
-            # left click slider or open panel
+            # everything near the slot
             if event.button == 1:
                 for slot_index in range(12):
-
-                    slot_button_clicked = False  # this does shit
-
+                    slot_button_clicked = False
                     cx = 120 + (slot_index % 4) * 200
                     cy = 150 + (slot_index // 4) * 250
 
+                    # 1/2 offset
                     off_x, off_y = cx + 30, cy + 30
                     if off_x <= mx <= off_x + 32 and off_y <= my <= off_y + 32:
                         shift_slot(slot_index)
                         slot_button_clicked = True
 
+                    # mute
                     ms_x, ms_y = cx - 45, cy + 32
-
                     if ms_x <= mx <= ms_x + 20 and ms_y <= my <= ms_y + 20:
                         slots[slot_index].mute = not slots[slot_index].mute
                         slot_button_clicked = True
 
+                    # solo
                     if ms_x + 24 <= mx <= ms_x + 44 and ms_y <= my <= ms_y + 20:
                         if slots[slot_index].solo:
                             slots[slot_index].solo = False
                         else:
+                            # unsolo everything else first
                             for s in slots:
                                 s.solo = False
                             slots[slot_index].solo = True
-
                         slot_button_clicked = True
 
+                    # volume slider
                     if not slot_button_clicked:
                         sx = cx - SLIDER_W // 2
                         sy = cy + CIRCLE_RADIUS + 15
-
                         if sx <= mx <= sx + SLIDER_W and sy <= my <= sy + SLIDER_H:
                             dragging_slider = slot_index
                             rel = mx - sx
@@ -2415,6 +2343,7 @@ while running:
                             )
                             break
 
+                        # main slot circle
                         if dragging_slider is None:
                             if (mx - cx) ** 2 + (my - cy) ** 2 < CIRCLE_RADIUS**2:
                                 panel_open = True
@@ -2422,12 +2351,14 @@ while running:
                                 dropdown_song_select.update_options(get_song_list())
                                 break
 
+        # stop dragging sliders
         if event.type == pygame.MOUSEBUTTONUP:
             if dragging_master_vol:
                 dragging_master_vol = False
                 save_config()
             dragging_slider = None
 
+        # drag sliders
         if event.type == pygame.MOUSEMOTION and dragging_slider is not None:
             i = dragging_slider
             cx = 120 + (i % 4) * 200
@@ -2435,25 +2366,31 @@ while running:
             rel = mx - sx
             slots[i].target_volume = max(0.0, min(1.0, rel / SLIDER_W))
 
+        # mouse wheel handling
         if event.type == pygame.MOUSEWHEEL:
+
+            # theme and font dropdown
             if options_open:
                 if dropdown_theme.handle_event(event) or dropdown_font.handle_event(
                     event
                 ):
                     continue
 
+            # song and stem select dropdown
             if panel_open and (
                 dropdown_song_select.handle_event(event)
                 or dropdown_stem_type_select.handle_event(event)
             ):
                 continue
 
+            # key and scale dropdown
             if manual_override_open and (
                 dropdown_manual_key.handle_event(event)
                 or dropdown_manual_scale.handle_event(event)
             ):
                 continue
 
+            # load project dropdown
             if (
                 loading_mode
                 and dropdown_load_project
@@ -2461,23 +2398,20 @@ while running:
             ):
                 continue
 
+            # scroll wheel to move sliders
             if not input_blocked:
                 mx, my = pygame.mouse.get_pos()
-
                 for i in range(12):
                     q, r = divmod(i, 4)
                     cx = 120 + r * 200
                     cy = 150 + q * 250
                     sx = cx - SLIDER_W // 2
                     sy = cy + CIRCLE_RADIUS + 15
-
                     slider_rect = pygame.Rect(
                         sx - 10, sy - 10, SLIDER_W + 20, SLIDER_H + 20
                     )
-
                     if slider_rect.collidepoint(mx, my):
                         scroll_amount = event.y * 0.05
-
                         new_vol = slots[i].target_volume + scroll_amount
                         slots[i].target_volume = max(0.0, min(1.0, new_vol))
                         break
