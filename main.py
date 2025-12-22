@@ -1048,7 +1048,7 @@ def get_song_list():
     return all_songs
 
 
-# this loads the stem, loads its metadaya, does the time and pitch stretch, and then puts it into a slot
+# this loads the stem, loads its metadata, does the time and pitch stretch, and then puts it into a slot
 def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
     global master_bpm, master_key, master_scale
 
@@ -1069,39 +1069,43 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
             with open(meta_path, "r") as f:
                 meta = json.load(f)
 
-            stem_key = meta["key"]
+            stem_key = meta["key"].strip().upper() if meta.get("key") else "C"
             stem_bpm = meta["bpm"]
+            meta_scale = meta.get("scale", "major").strip().lower()
 
             if master_bpm is None:
                 master_bpm = stem_bpm
                 master_key = stem_key
-                master_scale = meta.get("scale", "major")
+                master_scale = meta_scale
                 if show_progress:
                     tqdm.write(f"Master set to {master_key} {master_scale}.")
+
+            if master_scale:
+                master_scale = master_scale.strip().lower()
 
             if stem_type == "drums":
                 file_to_load = "drums.ogg"
                 stem_scale = "neutral"
             else:
                 target_scale = master_scale
-                target_path = os.path.join(
-                    song_folder, f"{stem_type}_{target_scale}.ogg"
-                )
+                target_filename = f"{stem_type}_{target_scale}.ogg"
+                target_path = os.path.join(song_folder, target_filename)
 
                 if os.path.exists(target_path):
-                    file_to_load = f"{stem_type}_{target_scale}.ogg"
+                    file_to_load = target_filename
                     stem_scale = target_scale
                 else:
                     fallback_scale = "minor" if target_scale == "major" else "major"
-                    fallback_path = os.path.join(
-                        song_folder, f"{stem_type}_{fallback_scale}.ogg"
-                    )
+                    fallback_filename = f"{stem_type}_{fallback_scale}.ogg"
+                    fallback_path = os.path.join(song_folder, fallback_filename)
+
                     if os.path.exists(fallback_path):
-                        file_to_load = f"{stem_type}_{fallback_scale}.ogg"
+                        file_to_load = fallback_filename
                         stem_scale = fallback_scale
                     else:
                         tqdm.write(f"ERROR: No stem files found for {stem_type}.")
                         return
+
             pbar.update(1)
             full_path = os.path.join(song_folder, file_to_load)
             stem_audio = load_audio_data(full_path)
@@ -1114,8 +1118,8 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
             with open(json_path, "r") as f:
                 data = json.load(f)
                 stem_bpm = data["bpm"]
-                stem_key = data["key"]
-                stem_scale = data.get("scale", "neutral")
+                stem_key = data["key"].strip().upper() if data.get("key") else "C"
+                stem_scale = data.get("scale", "neutral").strip().lower()
                 if "color" in data:
                     custom_color = tuple(data["color"])
 
@@ -1125,6 +1129,9 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
                 master_scale = stem_scale
                 if show_progress:
                     tqdm.write(f"Master set to {master_key} {master_scale}.")
+
+            if master_scale:
+                master_scale = master_scale.strip().lower()
 
             pbar.update(1)
             stem_audio = load_audio_data(ogg_path)
@@ -1141,8 +1148,11 @@ def add_stem_to_slot(slot_id, song_folder, stem_type, show_progress=True):
 
         # pitch shift
         if stem_type != "drums" and stem_scale != "neutral":
-            semis = key_shift_semitones(master_key, stem_key)
-            if stem_scale != "master_Scale":
+            safe_master_key = master_key.strip().upper() if master_key else "C"
+
+            semis = key_shift_semitones(safe_master_key, stem_key)
+
+            if stem_scale != master_scale:
                 if stem_scale == "minor" and master_scale == "major":
                     semis -= 3
                 elif stem_scale == "major" and master_scale == "minor":
@@ -1640,12 +1650,18 @@ while running:
         max_text_width = (CIRCLE_RADIUS * 2) - 10
         name = slot.song_name if slot.song_name else "Empty"
         stype = slot.type if slot.type else ""
+
         mode_label = ""
         if not slot.empty and slot.type != "drums" and master_scale:
-            if slot.scale == master_scale:
-                mode_label = f"{slot.scale.capitalize()}"
+            s_scale = slot.scale.strip().lower()
+            m_scale = master_scale.strip().lower()
+
+            if s_scale == "neutral":
+                mode_label = "Neutral"
+            elif s_scale == m_scale:
+                mode_label = f"{s_scale.capitalize()}"
             else:
-                mode_label = f"Relative {slot.scale.capitalize()}"
+                mode_label = f"Relative {s_scale.capitalize()}"
         elif not slot.empty and slot.type == "drums":
             mode_label = "Neutral"
 
@@ -2111,8 +2127,14 @@ while running:
 
                     try:
                         # update manual tuning
-                        master_key = dropdown_manual_key.get_selected()
-                        master_scale = dropdown_manual_scale.get_selected()
+                        new_key_sel = dropdown_manual_key.get_selected()
+                        new_scale_sel = dropdown_manual_scale.get_selected()
+
+                        if new_key_sel:
+                            master_key = new_key_sel.strip().upper()
+                        if new_scale_sel:
+                            master_scale = new_scale_sel.strip().lower()
+
                         new_bpm = None
                         if input_manual_bpm.text and float(input_manual_bpm.text) > 0:
                             new_bpm = float(input_manual_bpm.text)
