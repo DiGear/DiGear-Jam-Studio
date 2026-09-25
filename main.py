@@ -285,19 +285,54 @@ def lerp_color(c1, c2, t):
         int(c1[2] + (c2[2] - c1[2]) * t),
     )
 
+def resample_audio(audio, original_sr, target_sr):
+    if original_sr == target_sr:
+        return audio
+
+    if len(audio) == 0:
+        return audio
+
+    duration = len(audio) / original_sr
+    target_length = int(round(duration * target_sr))
+
+    old_positions = np.arange(len(audio), dtype=np.float64)
+    new_positions = np.linspace(
+        0,
+        len(audio) - 1,
+        target_length,
+        dtype=np.float64,
+    )
+
+    resampled = np.empty(
+        (target_length, audio.shape[1]),
+        dtype=np.float32,
+    )
+
+    for channel in range(audio.shape[1]):
+        resampled[:, channel] = np.interp(
+            new_positions,
+            old_positions,
+            audio[:, channel],
+        )
+
+    return resampled
 
 def load_audio_data(path):
     audio, sr = sf.read(path, dtype="float32")
+
     if audio.ndim == 1:
         # turn mono into stereo
         audio = np.stack([audio, audio], axis=1)
+
     if sr != SAMPLE_RATE:
-        print(f"Warning: samplerate mismatch in: {path}")
+        print(f"Resampling {path}: {sr} Hz -> {SAMPLE_RATE} Hz")
+        audio = resample_audio(audio, sr, SAMPLE_RATE)
 
     # normalize
     peak = np.max(np.abs(audio))
     if peak:
         audio /= peak
+
     return audio
 
 
