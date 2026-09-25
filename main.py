@@ -3,12 +3,17 @@ import json
 import math
 import os
 import threading
+import subprocess
+import tempfile
+import shutil
 
 import numpy as np
 import pygame
 import pyrubberband as rb
 import sounddevice as sd
 import soundfile as sf
+
+ffmpeg_available = shutil.which("ffmpeg") is not None
 
 from tqdm import tqdm
 
@@ -285,54 +290,41 @@ def lerp_color(c1, c2, t):
         int(c1[2] + (c2[2] - c1[2]) * t),
     )
 
-def resample_audio(audio, original_sr, target_sr):
-    if original_sr == target_sr:
-        return audio
-
-    if len(audio) == 0:
-        return audio
-
-    duration = len(audio) / original_sr
-    target_length = int(round(duration * target_sr))
-
-    old_positions = np.arange(len(audio), dtype=np.float64)
-    new_positions = np.linspace(
-        0,
-        len(audio) - 1,
-        target_length,
-        dtype=np.float64,
-    )
-
-    resampled = np.empty(
-        (target_length, audio.shape[1]),
-        dtype=np.float32,
-    )
-
-    for channel in range(audio.shape[1]):
-        resampled[:, channel] = np.interp(
-            new_positions,
-            old_positions,
-            audio[:, channel],
-        )
-
-    return resampled
 
 def load_audio_data(path):
     audio, sr = sf.read(path, dtype="float32")
+
+    if sr != SAMPLE_RATE:
+        print(f"Resampling {path}: {sr} Hz -> {SAMPLE_RATE} Hz")
+        duration = len(audio) / sr
+        target_frames = max(1, round(duration * SAMPLE_RATE))
+
+        if audio.ndim == 1:
+            audio = np.interp(
+                np.linspace(0, len(audio) - 1, target_frames),
+                np.arange(len(audio)),
+                audio,
+            ).astype(np.float32)
+        else:
+            old_positions = np.arange(len(audio))
+            new_positions = np.linspace(0, len(audio) - 1, target_frames)
+            resampled = np.empty((target_frames, audio.shape[1]), dtype=np.float32)
+            for channel in range(audio.shape[1]):
+                resampled[:, channel] = np.interp(
+                    new_positions,
+                    old_positions,
+                    audio[:, channel],
+                )
+            audio = resampled
 
     if audio.ndim == 1:
         # turn mono into stereo
         audio = np.stack([audio, audio], axis=1)
 
-    if sr != SAMPLE_RATE:
-        print(f"Resampling {path}: {sr} Hz -> {SAMPLE_RATE} Hz")
-        audio = resample_audio(audio, sr, SAMPLE_RATE)
-
     # normalize
     peak = np.max(np.abs(audio))
     if peak:
         audio /= peak
-
     return audio
 
 
@@ -555,7 +547,6 @@ def apply_mix_processing(mix, active_slot_count, master_volume):
         1 - strength * (1 - 1 / active_slot_count)
     )
 
-    # keep live/export output consistent
     ratio = 0.8
     mix = np.where(
         mix <= ratio,
@@ -1041,6 +1032,10 @@ btn_notation_toggle = pygame.Rect(350, 340, 200, 35)
 
 saving_mode = False
 loading_mode = False
+exporting_mode = False
+export_input = TextInput(
+    (SCREEN_W - 300) // 2, (SCREEN_H - 100) // 2 + 20, 300, 40, text="My_Jam"
+)
 save_input = TextInput(
     (SCREEN_W - 300) // 2, (SCREEN_H - 100) // 2 + 20, 300, 40, text="My_Jam"
 )
@@ -1275,8 +1270,8 @@ def toggle_master_playback():
     )()
 
 
-def export_mix_to_wav(filename="export.wav"):
-    print("Starting export...")
+def export_mix(filename="export.wav", format="WAV"):
+    print("Starting export.")
     max_len = audio_engine.max_length
     if max_len == 0:
         print("ERROR: No audio data to export.")
@@ -1308,11 +1303,38 @@ def export_mix_to_wav(filename="export.wav"):
         master_mix, len(active_slots), audio_engine.master_volume
     )
 
-    try:
-        sf.write(filename, master_mix, SAMPLE_RATE)
-        print(f"Exported to: {filename}")
-    except Exception as e:
-        print(f"Export failed: {e}")
+    if format == "WAV":
+        sf.write(filename, master_mix, SAMPLE_RATE, format="WAV")
+    elif format == "OGG":
+        temp_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp:
+                temp_path = temp.name
+
+            sf.write(temp_path, master_mix, SAMPLE_RATE, format="WAV")
+
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    temp_path,
+                    "-c:a",
+                    "libvorbis",
+                    filename,
+                ],
+                check=True,
+            )
+        finally:
+            if temp_path is not None:
+                try:
+                    os.unlink(temp_path)
+                except FileNotFoundError:
+                    pass
 
 
 def save_project(filename="project_data.json"):
@@ -1468,6 +1490,7 @@ while running:
         or options_open
         or saving_mode
         or loading_mode
+        or exporting_mode
     )
 
     # slider anims
@@ -1504,7 +1527,7 @@ while running:
     pygame.draw.rect(screen, reset_outline, btn_reset_rect, 4, border_radius=4)
     draw_text_centered("Reset", FONT_MEDIUM, palette["text_main"], btn_reset_rect)
 
-    # export wav button
+    # export button
     btn_exp_w, btn_exp_h = 140, 40
     btn_exp_rect = pygame.Rect(
         SCREEN_W - btn_exp_w - 20, SCREEN_H - btn_exp_h - 20, btn_exp_w, btn_exp_h
@@ -1516,7 +1539,7 @@ while running:
         exp_outline = darken_color(exp_col)
     pygame.draw.rect(screen, exp_col, btn_exp_rect, border_radius=4)
     pygame.draw.rect(screen, exp_outline, btn_exp_rect, 4, border_radius=4)
-    draw_text_centered("Export WAV", FONT_MEDIUM, palette["text_main"], btn_exp_rect)
+    draw_text_centered("Export", FONT_MEDIUM, palette["text_main"], btn_exp_rect)
 
     # save and load buttons
     btn_save_rect = pygame.Rect(SCREEN_W - 320, 20, 90, 40)
@@ -1855,6 +1878,57 @@ while running:
         dropdown_theme.draw_list(screen)
         dropdown_font.draw_list(screen)
 
+    if exporting_mode:
+        overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+        overlay.fill(palette["overlay"])
+        screen.blit(overlay, (0, 0))
+        box_rect = pygame.Rect((SCREEN_W - 400) // 2, (SCREEN_H - 250) // 2, 400, 250)
+        pygame.draw.rect(screen, palette["input_bg"], box_rect)
+        pygame.draw.rect(screen, palette["input_border"], box_rect, 2)
+        title_rect = pygame.Rect(box_rect.x, box_rect.y + 25, 400, 40)
+        draw_text_centered(
+            "Export Mix As:", FONT_LARGE, palette["text_main"], title_rect
+        )
+        export_input.rect.center = box_rect.center
+        export_input.draw(screen)
+        btn_w, btn_h = 100, 40
+        gap = 15
+        total_w = (btn_w * 3) + (gap * 2)
+        start_x = box_rect.centerx - (total_w // 2)
+        btn_y = box_rect.bottom - 60
+        export_ogg_rect = pygame.Rect(start_x, btn_y, btn_w, btn_h)
+        export_wav_rect = pygame.Rect(start_x + btn_w + gap, btn_y, btn_w, btn_h)
+        export_cancel_rect = pygame.Rect(
+            start_x + (btn_w + gap) * 2, btn_y, btn_w, btn_h
+        )
+        draw_action_button(
+            screen,
+            "OGG",
+            export_ogg_rect,
+            palette["btn_confirm"] if ffmpeg_available else palette["btn_ctrl"],
+            mx,
+            my,
+            FONT_MEDIUM,
+        )
+        draw_action_button(
+            screen,
+            "WAV",
+            export_wav_rect,
+            palette["btn_confirm"],
+            mx,
+            my,
+            FONT_MEDIUM,
+        )
+        draw_action_button(
+            screen,
+            "CANCEL",
+            export_cancel_rect,
+            palette["btn_cancel"],
+            mx,
+            my,
+            FONT_MEDIUM,
+        )
+
     # saving panel
     if saving_mode:
         overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
@@ -1965,6 +2039,59 @@ while running:
 
             # stop dragging slot volume slider
             dragging_slider = None
+
+        if exporting_mode:
+            if export_input.handle_event(event):
+                continue
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                box_rect = pygame.Rect(
+                    (SCREEN_W - 400) // 2, (SCREEN_H - 250) // 2, 400, 250
+                )
+                btn_w, btn_h = 100, 40
+                gap = 15
+                total_w = (btn_w * 3) + (gap * 2)
+                start_x = box_rect.centerx - (total_w // 2)
+                btn_y = box_rect.bottom - 60
+                export_ogg_rect = pygame.Rect(start_x, btn_y, btn_w, btn_h)
+                export_wav_rect = pygame.Rect(
+                    start_x + btn_w + gap, btn_y, btn_w, btn_h
+                )
+                export_cancel_rect = pygame.Rect(
+                    start_x + (btn_w + gap) * 2, btn_y, btn_w, btn_h
+                )
+
+                if export_input.rect.collidepoint(mx, my):
+                    continue
+
+                if ffmpeg_available and export_ogg_rect.collidepoint(mx, my):
+                    fname = export_input.text
+                    if len(fname) > 0:
+                        if fname.lower().endswith(".wav"):
+                            fname = fname[:-4]
+                        elif fname.lower().endswith(".ogg"):
+                            fname = fname[:-4]
+                        filename = os.path.join("exports", fname + ".ogg")
+                        export_mix(filename, "OGG")
+                        exporting_mode = False
+                        pygame.key.stop_text_input()
+
+                elif export_wav_rect.collidepoint(mx, my):
+                    fname = export_input.text
+                    if len(fname) > 0:
+                        if fname.lower().endswith(".wav"):
+                            fname = fname[:-4]
+                        elif fname.lower().endswith(".ogg"):
+                            fname = fname[:-4]
+                        filename = os.path.join("exports", fname + ".wav")
+                        export_mix(filename, "WAV")
+                        exporting_mode = False
+                        pygame.key.stop_text_input()
+
+                elif export_cancel_rect.collidepoint(mx, my):
+                    exporting_mode = False
+                    pygame.key.stop_text_input()
+            continue
 
         # save panel stuff
         if saving_mode:
@@ -2279,24 +2406,12 @@ while running:
 
             # export wav button
             if btn_exp_rect.collidepoint(mx, my) and event.button == 1:
-                overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-                overlay.fill(palette["overlay"])
-                screen.blit(overlay, (0, 0))
-                wait_w, wait_h = 300, 100
-                wait_rect = pygame.Rect(
-                    (SCREEN_W - wait_w) // 2, (SCREEN_H - wait_h) // 2, wait_w, wait_h
+                exporting_mode = True
+                export_input.text = "My_Jam"
+                export_input.txt_surface = export_input.font.render(
+                    export_input.text, True, palette["text_main"]
                 )
-                pygame.draw.rect(screen, palette["popup_bg"], wait_rect)
-                pygame.draw.rect(screen, palette["popup_border"], wait_rect, 3)
-                draw_text_centered(
-                    "Rendering WAV...", FONT_LARGE, palette["text_main"], wait_rect
-                )
-                pygame.display.flip()
-
-                now = datetime.datetime.now()
-                timestamp = now.isoformat()[:19].replace(":", "-")
-                filename = os.path.join("exports", f"jam_{timestamp}.wav")
-                export_mix_to_wav(filename)
+                pygame.key.start_text_input()
                 continue
 
             # restart playback
