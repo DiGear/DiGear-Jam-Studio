@@ -505,6 +505,32 @@ class Slot:
         return chunk * self.volume
 
 
+def slot_should_play(slot, active_slots):
+    if any(s.solo for s in active_slots):
+        return slot.solo
+    return not slot.mute
+
+
+def apply_mix_processing(mix, active_slot_count, master_volume):
+    if active_slot_count <= 0:
+        return np.zeros_like(mix)
+
+    strength = 0.8
+    mix = mix * master_volume * (
+        1 - strength * (1 - 1 / active_slot_count)
+    )
+
+    # keep live/export output consistent
+    ratio = 0.8
+    mix = np.where(
+        mix <= ratio,
+        mix,
+        1 - (1 - ratio) * np.exp((ratio - mix) / (1 - ratio)),
+    )
+
+    return np.clip(mix, -1, 1).astype(np.float32, copy=False)
+
+
 class AudioEngine:
     def __init__(self, slots, samplerate=44100):
         self.slots = slots
@@ -549,32 +575,12 @@ class AudioEngine:
             mix = np.zeros((frames, CHANNELS), dtype=np.float32)
 
             for slot in active_slots:
-                should_play = False
-                if any(s.solo for s in active_slots):
-                    if slot.solo:
-                        should_play = True
-                else:
-                    if not slot.mute:
-                        should_play = True
-
-                if should_play:
+                if slot_should_play(slot, active_slots):
                     slot_data = slot.get_audio_chunk(self.position, frames, CHANNELS)
                     mix += slot_data
 
-            # lower volume based on number of active slots
-            strength = 0.8
-            mix *= self.master_volume * (1 - strength * (1 - 1 / len(active_slots)))
-
-            # adjustable soft clipping (thanks pizzi)
-            ratio = 0.8
-            outdata[:] = np.clip(
-                np.where(
-                    mix <= ratio,
-                    mix,
-                    1 - (1 - ratio) * np.exp((ratio - mix) / (1 - ratio)),
-                ),
-                -1,
-                1,
+            outdata[:] = apply_mix_processing(
+                mix, len(active_slots), self.master_volume
             )
 
             self.position += frames
@@ -1243,10 +1249,10 @@ def export_mix_to_wav(filename="export.wav"):
 
     master_mix = np.zeros((max_len, CHANNELS), dtype=np.float32)
 
-    for slot in slots:
-        if slot.empty or slot.stem is None:
-            continue
-        if slot.mute:
+    active_slots = [s for s in slots if not s.empty and s.stem is not None]
+
+    for slot in active_slots:
+        if not slot_should_play(slot, active_slots):
             continue
 
         audio = slot.stem
@@ -1263,8 +1269,9 @@ def export_mix_to_wav(filename="export.wav"):
             processed_audio = processed_audio[:max_len]
         master_mix += processed_audio * slot.volume
 
-    master_mix *= audio_engine.master_volume
-    master_mix = np.clip(master_mix, -1.0, 1.0)
+    master_mix = apply_mix_processing(
+        master_mix, len(active_slots), audio_engine.master_volume
+    )
 
     try:
         sf.write(filename, master_mix, SAMPLE_RATE)
